@@ -10,12 +10,12 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout Project Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
-      # Install Arduino CLI Manually (Bypasses deprecated Node 20 action)
+      # Install Arduino CLI Manually
       - name: Install Arduino CLI
         run: |
           mkdir -p $HOME/bin
@@ -34,8 +34,7 @@ jobs:
 
       - name: Compile Sketch
         run: |
-          # Matches your working repo: compiles the root directory where ESP-Now-Controller.ino lives
-          arduino-cli compile --fqbn esp32:esp32:esp32c3 --output-dir ./build .
+          arduino-cli compile --fqbn esp32:esp32:esp32c3 --output-dir ./build ESP_NOW_Controller.ino
 
       - name: Prepare Files for Web Flasher
         run: |
