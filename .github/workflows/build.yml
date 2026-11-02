@@ -3,6 +3,7 @@ name: Compile and Deploy Firmware
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,8 +15,11 @@ jobs:
       - name: Checkout Project Repository
         uses: actions/checkout@v4
 
-      - name: Setup Arduino CLI
-        uses: arduino/setup-arduino-cli@v2
+      # Install Arduino CLI Manually (Bypasses deprecated Node 20 setup action)
+      - name: Install Arduino CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$HOME/bin sh
+          echo "$HOME/bin" >> $GITHUB_PATH
 
       - name: Initialize Arduino CLI & Add ESP32 Core
         run: |
@@ -30,14 +34,15 @@ jobs:
 
       - name: Compile Sketch
         run: |
-          arduino-cli compile --fqbn esp32:esp32:esp32c3 --output-dir ./build .
+          # Compile from the root directory referencing your main sketch file
+          arduino-cli compile --fqbn esp32:esp32:esp32c3 --output-dir ./build ESP-Now-Controller.ino
 
       - name: Prepare Files for Web Flasher
         run: |
           cp ./build/*.ino.merged.bin ./firmware.bin
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./
