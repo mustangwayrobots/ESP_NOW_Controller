@@ -37,9 +37,8 @@ jobs:
 
       - name: Inject Dynamic Version into Manifest
         run: |
-          COMMIT_HASH=$(git rev-parse --short HEAD)
           BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M")
-          VERSION_STRING="build-$COMMIT_HASH ($BUILD_DATE)"
+          VERSION_STRING="Build: $BUILD_DATE UTC"
           jq --arg ver "$VERSION_STRING" '.version = $ver' ./flash/manifest.json > ./flash/manifest.json.tmp && mv ./flash/manifest.json.tmp ./flash/manifest.json
 
       - name: Deploy to GitHub Pages
