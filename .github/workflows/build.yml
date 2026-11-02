@@ -36,7 +36,7 @@ jobs:
       # Step 2: Install Arduino CLI & ESP32 Core (Only runs if a sketch exists)
       - name: Setup Arduino CLI
         if: steps.check_sketch.outputs.has_sketch == 'true'
-        uses: arduino/setup-arduino-cli@v3
+        uses: arduino/setup-arduino-cli@v2
 
       - name: Install ESP32 Platform
         if: steps.check_sketch.outputs.has_sketch == 'true'
@@ -54,7 +54,7 @@ jobs:
           mkdir -p flash
           arduino-cli compile --fqbn esp32:esp32:esp32c3 --output-dir ./flash "$SKETCH_FILE"
 
-      # Step 4: Setup Pages & Upload Artifact (Updated to v5 for Node 24 runner compatibility)
+      # Step 4: Setup Pages & Upload Artifact
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
