@@ -15,9 +15,10 @@ jobs:
       - name: Checkout Project Repository
         uses: actions/checkout@v4
 
-      # Install Arduino CLI Manually (Bypasses deprecated Node 20 setup action)
+      # Ensure the bin directory exists before installing Arduino CLI manually
       - name: Install Arduino CLI
         run: |
+          mkdir -p $HOME/bin
           curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$HOME/bin sh
           echo "$HOME/bin" >> $GITHUB_PATH
 
