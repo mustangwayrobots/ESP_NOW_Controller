@@ -36,6 +36,8 @@ void readInputs() {
     joystickX = constrain(joystickX, -1023, 1023);
     joystickY = constrain(joystickY, -1023, 1023);
 
-    // DEBUG: Prints raw vs normalized joystick values to monitor axis behavior
+    // DEBUG: Only prints raw vs normalized joystick values when debug flag is true
+#if DEBUG_SERIAL_OUTPUT
     Serial.printf("[IN] rawX:%4d rawY:%4d | joyX:%4d joyY:%4d\n", rawX, rawY, joystickX, joystickY);
+#endif
 }

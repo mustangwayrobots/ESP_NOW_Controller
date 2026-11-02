@@ -7,6 +7,7 @@ void setupBindingMode() {
   Serial.println("[INIT-BIND] Configuring controller radio layers for pairing...");
   
   WiFi.mode(WIFI_STA);
+  WiFi.setTxPower(WIFI_POWER_11dBm); // Set optimized transmit power
   Serial.print("[INIT-BIND] Controller MAC: "); Serial.println(WiFi.macAddress());
 
   if (esp_now_init() != ESP_OK) {

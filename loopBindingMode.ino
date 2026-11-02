@@ -20,10 +20,12 @@ void loopBindingMode() {
   // 3. Once released, proceed with active binding display and broadcasts
   displayMsg("BINDING...", 100, 2);
 
+#if DEBUG_SERIAL_OUTPUT
   if (millis() - lastDebugStatus > 1000) {
     lastDebugStatus = millis();
     Serial.printf("[LOOP-BIND] Controller searching... ReceiveBindingComplete flag = %d\n", ReceiveBindingComplete);
   }
+#endif
 
   if (millis() - lastBindSend > 200) {
     lastBindSend = millis();
@@ -32,7 +34,9 @@ void loopBindingMode() {
     memset(&bindPacket, 0, sizeof(bindPacket));
     bindPacket.protocolMode = 0; 
     
+#if DEBUG_SERIAL_OUTPUT
     Serial.println("[BIND] Broadcasting pairing request to car...");
+#endif
     esp_now_send(broadcastMac, (uint8_t *)&bindPacket, sizeof(bindPacket));
   }
 
