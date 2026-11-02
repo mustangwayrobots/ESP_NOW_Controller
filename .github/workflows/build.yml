@@ -15,7 +15,7 @@ jobs:
       - name: Checkout Project Repository
         uses: actions/checkout@v4
 
-      # Ensure the bin directory exists before installing Arduino CLI manually
+      # Install Arduino CLI Manually
       - name: Install Arduino CLI
         run: |
           mkdir -p $HOME/bin
@@ -30,13 +30,12 @@ jobs:
 
       - name: Pull Central Custom Libraries
         run: |
-          # Clones your private central libraries directly into the Arduino libraries path using the secure token
           git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/mustangwayrobots/arduino-libraries.git /home/runner/Arduino/libraries
 
       - name: Compile Sketch
         run: |
-          # Compile from the root directory referencing your main sketch file
-          arduino-cli compile --fqbn esp32:esp32:esp32c3 --output-dir ./build ESP-Now-Controller.ino
+          # Compile explicitly from the root checkout path
+          arduino-cli compile --fqbn esp32:esp32:esp32c3 --output-dir ./build ${{ github.workspace }}/ESP-Now-Controller.ino
 
       - name: Prepare Files for Web Flasher
         run: |
