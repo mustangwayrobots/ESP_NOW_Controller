@@ -25,7 +25,6 @@ jobs:
 
       - name: Pull Central Custom Libraries
         run: |
-          # Clones your private central libraries directly into the Arduino libraries path using the secure token
           git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/mustangwayrobots/arduino-libraries.git /home/runner/Arduino/libraries
 
       - name: Compile Sketch
@@ -35,6 +34,13 @@ jobs:
       - name: Prepare Files for Web Flasher
         run: |
           cp ./build/*.ino.merged.bin ./firmware.bin
+
+      - name: Inject Dynamic Version into Manifest
+        run: |
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M")
+          VERSION_STRING="build-$COMMIT_HASH ($BUILD_DATE)"
+          jq --arg ver "$VERSION_STRING" '.version = $ver' ./flash/manifest.json > ./flash/manifest.json.tmp && mv ./flash/manifest.json.tmp ./flash/manifest.json
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
