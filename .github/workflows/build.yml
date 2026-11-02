@@ -15,7 +15,7 @@ jobs:
       - name: Checkout Project Repository
         uses: actions/checkout@v4
 
-      # Install Arduino CLI Manually
+      # Install Arduino CLI Manually (Bypasses deprecated Node 20 action)
       - name: Install Arduino CLI
         run: |
           mkdir -p $HOME/bin
@@ -34,8 +34,8 @@ jobs:
 
       - name: Compile Sketch
         run: |
-          # Point straight to the workspace root where ESP-Now-Controller.ino lives
-          arduino-cli compile --fqbn esp32:esp32:esp32c3 --output-dir ./build ${{ github.workspace }}/ESP-Now-Controller.ino
+          # Matches your working repo: compiles the root directory where ESP-Now-Controller.ino lives
+          arduino-cli compile --fqbn esp32:esp32:esp32c3 --output-dir ./build .
 
       - name: Prepare Files for Web Flasher
         run: |
