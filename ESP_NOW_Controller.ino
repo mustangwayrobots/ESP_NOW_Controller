@@ -16,6 +16,7 @@ Preferences preferences;
 
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
+#define DEBUG_SERIAL_OUTPUT false  // Set to true only when troubleshooting inputs/radio
 #define WIFI_CHANNEL 1
 
 // Correct GPIO Pin Definitions (Avoiding bootstrap pins 2 & 9)
@@ -44,6 +45,10 @@ int Speed_B = 0;
 int joystickX;
 int joystickY;
 boolean MenuMode;
+
+// Adaptive Rate Tracking
+unsigned long lastSendTime = 0;
+int currentSendInterval = 20; // Default active 50Hz rate
 
 // Function Declarations
 void setupNormalMode();   

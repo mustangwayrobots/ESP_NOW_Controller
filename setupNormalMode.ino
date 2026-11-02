@@ -11,6 +11,7 @@ void setupNormalMode() {
   Serial.println("[INIT-NORM] Entering controller drive configuration setup...");
   
   WiFi.mode(WIFI_STA);
+  WiFi.setTxPower(WIFI_POWER_8_5dBm); // Set optimized transmit power
 
   // --- READ SAVED CAR MAC FROM NVS ---
   preferences.begin("rc-config", true);
@@ -58,18 +59,19 @@ void setupNormalMode() {
   }
 
   // --- REGISTER COMMUNICATION CALLBACKS ---
-  // Send callback ONLY refreshes the timer on success, preventing single-packet drop jitter
   esp_now_register_send_cb([](const wifi_tx_info_t *info, esp_now_send_status_t status) {
     if (status == ESP_NOW_SEND_SUCCESS) {
       lastSendAckTime = millis(); 
     }
   });
 
-  // Receive callback exclusively handles incoming telemetry (battery packets every 5s)
+  // Receive callback exclusively handles incoming telemetry (battery packets)
   esp_now_register_recv_cb([](const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
     if (len >= sizeof(RC_Packet_Structure)) {
       memcpy(&ReceivingData, data, sizeof(RC_Packet_Structure));
+#if DEBUG_SERIAL_OUTPUT
       Serial.printf("[DEBUG-RX] Telemetry battery received: %d mV\n", ReceivingData.battery);
+#endif
     }
   });
 

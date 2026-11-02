@@ -58,7 +58,9 @@ void SelectButtonPressed(){
       preferences.putInt(key, currentSettings[i]);
     }
     preferences.end();
+#if DEBUG_SERIAL_OUTPUT
     Serial.println("Settings saved to NVS successfully.");
+#endif
     
     if (strcmp(Menu[CurrentMenuItem].label, "DEFAULTS") == 0 ){
       displayMsg("RESET OK!", 255, 1);
@@ -69,7 +71,9 @@ void SelectButtonPressed(){
     }
     
     if (strcmp(Menu[CurrentMenuItem].label, "TEST TRIM") == 0){      
+#if DEBUG_SERIAL_OUTPUT
       Serial.println("Running trim test...");
+#endif
       runtest(); 
     }
     displayMsg(Menu[CurrentMenuItem].label, 255, 1);

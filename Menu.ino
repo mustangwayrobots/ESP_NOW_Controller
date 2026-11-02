@@ -1,7 +1,7 @@
 // ==============================================================================
 // Menu.ino - Core Menu Navigation and State Management  
 // ==============================================================================
-static uint32_t menuDebounceTime =  0;
+static uint32_t menuDebounceTime = 0;
 static uint32_t selectDebounceTime = 0;
 static uint32_t navDebounceTime = 0;
 uint32_t debounceDelay = 200;
