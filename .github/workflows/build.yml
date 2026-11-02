@@ -33,10 +33,12 @@ jobs:
             echo "No .ino file found in root directory. Skipping compilation step."
           fi
 
-      # Step 2: Install Arduino CLI & ESP32 Core (Only runs if a sketch exists)
-      - name: Setup Arduino CLI
+      # Step 2: Install Arduino CLI Manually (Bypasses deprecated Node 20 action)
+      - name: Install Arduino CLI
         if: steps.check_sketch.outputs.has_sketch == 'true'
-        uses: arduino/setup-arduino-cli@v2
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$HOME/bin sh
+          echo "$HOME/bin" >> $GITHUB_PATH
 
       - name: Install ESP32 Platform
         if: steps.check_sketch.outputs.has_sketch == 'true'
