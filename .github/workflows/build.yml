@@ -34,7 +34,7 @@ jobs:
 
       - name: Compile Sketch
         run: |
-          # Compile explicitly from the root checkout path
+          # Point straight to the workspace root where ESP-Now-Controller.ino lives
           arduino-cli compile --fqbn esp32:esp32:esp32c3 --output-dir ./build ${{ github.workspace }}/ESP-Now-Controller.ino
 
       - name: Prepare Files for Web Flasher
