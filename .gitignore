@@ -1,0 +1,7 @@
+# Compiled binaries and temporary build folders
+build/
+*.hex
+*.elf
+
+# Allow the web flasher binary to be tracked/deployed
+!firmware.bin
