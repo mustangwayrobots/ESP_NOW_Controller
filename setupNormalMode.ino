@@ -1,11 +1,14 @@
 /**
  * ==============================================================================
- * setupNormalMode.ino (Controller - Send-Ack Watchdog Integration)
+ * setupNormalMode.ino (Controller - Send-Ack Watchdog Integration & Persistent Binding Fix)
  * ==============================================================================
  */
 
 // Global tracker for outgoing send confirmation watchdog
 unsigned long lastSendAckTime = 0;
+
+// Forward declaration for your main operational mode transition if needed
+void enterOperationalMode();
 
 void setupNormalMode() {
   Serial.println("[INIT-NORM] Entering controller drive configuration setup...");
@@ -14,13 +17,19 @@ void setupNormalMode() {
   WiFi.setTxPower(WIFI_POWER_8_5dBm); // Set optimized transmit power
 
   // --- READ SAVED CAR MAC FROM NVS ---
+  bool hasValidBinding = false;
   preferences.begin("rc-config", true);
   if (preferences.isKey("mac")) {
     String savedMac = preferences.getString("mac", "");
-    sscanf(savedMac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-           &BindingMac[0], &BindingMac[1], &BindingMac[2],
-           &BindingMac[3], &BindingMac[4], &BindingMac[5]);
-    Serial.printf("[INIT-NORM] Loaded Car MAC from NVS: %s\n", savedMac.c_str());
+    if (savedMac.length() == 17 && savedMac.indexOf(':') == 2 && savedMac != "00:00:00:00:00:00") {
+      sscanf(savedMac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+             &BindingMac[0], &BindingMac[1], &BindingMac[2],
+             &BindingMac[3], &BindingMac[4], &BindingMac[5]);
+      Serial.printf("[INIT-NORM] Loaded Car MAC from NVS: %s\n", savedMac.c_str());
+      hasValidBinding = true;
+    } else {
+      Serial.println("[WARN] Saved car MAC in NVS is malformed or empty!");
+    }
   } else {
     Serial.println("[WARN] No saved car MAC found in NVS! Using default fallback MAC.");
   }
@@ -75,6 +84,15 @@ void setupNormalMode() {
     }
   });
 
-  displayMsg("WAITING");
+  // --- CONDITIONAL STATE CHECK ---
+  if (hasValidBinding) {
+    Serial.println("[INIT-NORM] Valid binding found in memory. Bypassing pairing screen.");
+    // If you have a specific operational transition function, call it here:
+    // enterOperationalMode();
+  } else {
+    Serial.println("[INIT-NORM] No valid binding found. Entering waiting/pairing state.");
+    displayMsg("WAITING");
+  }
+  
   Serial.println("[INIT-NORM] Controller normal drive environment initialized successfully.");
 }
