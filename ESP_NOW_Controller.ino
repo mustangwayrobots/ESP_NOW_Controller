@@ -16,7 +16,7 @@ Preferences preferences;
 
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
-#define DEBUG_SERIAL_OUTPUT false  // Set to true only when troubleshooting inputs/radio
+#define DEBUG_SERIAL_OUTPUT true  // Set to true only when troubleshooting inputs/radio
 #define WIFI_CHANNEL 1
 
 // Correct GPIO Pin Definitions (Avoiding bootstrap pins 2 & 9)
