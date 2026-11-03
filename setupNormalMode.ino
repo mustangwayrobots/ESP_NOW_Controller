@@ -1,14 +1,11 @@
 /**
  * ==============================================================================
- * setupNormalMode.ino (Controller - Send-Ack Watchdog Integration & Persistent Binding Fix)
+ * setupNormalMode.ino (Controller - Persistent Binding & Web Flash Reset Handler)
  * ==============================================================================
  */
 
 // Global tracker for outgoing send confirmation watchdog
 unsigned long lastSendAckTime = 0;
-
-// Forward declaration for your main operational mode transition if needed
-void enterOperationalMode();
 
 void setupNormalMode() {
   Serial.println("[INIT-NORM] Entering controller drive configuration setup...");
@@ -21,6 +18,7 @@ void setupNormalMode() {
   preferences.begin("rc-config", true);
   if (preferences.isKey("mac")) {
     String savedMac = preferences.getString("mac", "");
+    // Strict validation: must be 17 chars, contain colons, and not be empty/null/zeros
     if (savedMac.length() == 17 && savedMac.indexOf(':') == 2 && savedMac != "00:00:00:00:00:00") {
       sscanf(savedMac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
              &BindingMac[0], &BindingMac[1], &BindingMac[2],
@@ -31,7 +29,7 @@ void setupNormalMode() {
       Serial.println("[WARN] Saved car MAC in NVS is malformed or empty!");
     }
   } else {
-    Serial.println("[WARN] No saved car MAC found in NVS! Using default fallback MAC.");
+    Serial.println("[WARN] No saved car MAC found in NVS (Likely a fresh Web Flash wipe).");
   }
   preferences.end();
 
@@ -53,18 +51,20 @@ void setupNormalMode() {
   WiFi.setSleep(true);
   esp_wifi_set_channel(calculatedChannel, WIFI_SECOND_CHAN_NONE);
  
-  // --- REGISTER CAR PEER USING LOADED MAC ---
-  esp_now_peer_info_t peerInfo = {};
-  memset(&peerInfo, 0, sizeof(peerInfo));
-  memcpy(peerInfo.peer_addr, BindingMac, 6);
-  peerInfo.channel = calculatedChannel; 
-  peerInfo.ifidx   = WIFI_IF_STA;       
-  peerInfo.encrypt = false;
-  
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("[WARN] Failed to add unicast peer or peer already exists.");
-  } else {
-    Serial.println("[INIT-NORM] Car peer registered successfully.");
+  // --- REGISTER CAR PEER USING LOADED MAC (Only if valid binding exists) ---
+  if (hasValidBinding) {
+    esp_now_peer_info_t peerInfo = {};
+    memset(&peerInfo, 0, sizeof(peerInfo));
+    memcpy(peerInfo.peer_addr, BindingMac, 6);
+    peerInfo.channel = calculatedChannel; 
+    peerInfo.ifidx   = WIFI_IF_STA;       
+    peerInfo.encrypt = false;
+    
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+      Serial.println("[WARN] Failed to add unicast peer or peer already exists.");
+    } else {
+      Serial.println("[INIT-NORM] Car peer registered successfully.");
+    }
   }
 
   // --- REGISTER COMMUNICATION CALLBACKS ---
@@ -87,8 +87,6 @@ void setupNormalMode() {
   // --- CONDITIONAL STATE CHECK ---
   if (hasValidBinding) {
     Serial.println("[INIT-NORM] Valid binding found in memory. Bypassing pairing screen.");
-    // If you have a specific operational transition function, call it here:
-    // enterOperationalMode();
   } else {
     Serial.println("[INIT-NORM] No valid binding found. Entering waiting/pairing state.");
     displayMsg("WAITING");
