@@ -38,7 +38,7 @@ boolean NewDataFlag = false;
 volatile boolean SendBindingComplete = false; 
 volatile boolean ReceiveBindingComplete = false;
 
-uint8_t BindingMac[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; // Default to empty/zeros
+uint8_t BindingMac[] = {0x36, 0x33, 0x33, 0x33, 0x33, 0x99};
 uint8_t broadcastMac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 int Speed_A = 0;
 int Speed_B = 0;
@@ -92,11 +92,9 @@ void setup() {
            &BindingMac[0], &BindingMac[1], &BindingMac[2],
            &BindingMac[3], &BindingMac[4], &BindingMac[5]);
     Serial.println("Loaded bound MAC from NVS.");
-  } else {
-    Serial.println("[WARN] No bound MAC found in NVS (Fresh flash state).");
   }
 
-  for(int i = 0; i <  MENU_ITEMS; i++) {
+  for(int i = 0; i < MENU_ITEMS; i++) {
     char key[10];
     snprintf(key, sizeof(key), "set_%d", i);
     currentSettings[i] = preferences.getInt(key, defaultSettings[i]);
