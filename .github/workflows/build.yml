@@ -33,7 +33,7 @@ jobs:
 
       - name: Prepare Files for Web Flasher
         run: |
-          cp ./build/*.ino.merged.bin ./firmware.bin
+          find ./build -name "*.ino.merged.bin" -exec cp {} ./firmware.bin \;
 
       - name: Inject Dynamic Version into Manifest
         run: |
