@@ -2,7 +2,7 @@
 // loopNormalMode.ino - Normal Driving Loop & Connection State Management
 // ==============================================================================
 
-// Reference external send-ack watchdog tracker from setupNormalMode.ino
+// Reference external send-ack watchdog tracker from setupNormalMode.ino   
 extern unsigned long lastSendAckTime;
 
 // Reference adaptive rate tracking variables from ESP_NOW_Controller.ino
