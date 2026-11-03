@@ -3,7 +3,6 @@
  * setupNormalMode.ino (Clean & Lightweight Architecture)  
  * ==============================================================================
  */
-
 unsigned long lastSendAckTime = 0;
 
 void setupNormalMode() {
