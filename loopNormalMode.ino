@@ -1,5 +1,5 @@
 // ==============================================================================
-// loopNormalMode.ino - Normal Driving Loop & Connection State Management
+// loopNormalMode.ino - Normal Driving Loop & Connection State Management  
 // ==============================================================================
 
 // Reference external send-ack watchdog tracker from setupNormalMode.ino   
