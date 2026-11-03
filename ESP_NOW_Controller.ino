@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * ESP-NOW RC Transmitter Core (ESP32-C3 Architecture Layout)     
+ * ESP-NOW RC Transmitter Core (ESP32-C3 Architecture Layout)
  * ==============================================================================
  */
 #include <WiFi.h>
