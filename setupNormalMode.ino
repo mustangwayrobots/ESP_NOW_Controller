@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * setupNormalMode.ino (Controller - Robust NVS MAC Verification)
+ * setupNormalMode.ino (Controller - Full Debug Trace Integration)
  * ==============================================================================
  */
 
@@ -8,45 +8,54 @@
 unsigned long lastSendAckTime = 0;
 
 void setupNormalMode() {
+  Serial.begin(115200);
+  delay(1000); // Give serial monitor time to catch boot logs
+  Serial.println("\n[DEBUG-BOOT] ========================================");
+  Serial.println("[DEBUG-BOOT] Controller boot sequence initiated.");
   Serial.println("[INIT-NORM] Entering controller drive configuration setup...");
   
   WiFi.mode(WIFI_STA);
   WiFi.setTxPower(WIFI_POWER_8_5dBm); // Set optimized transmit power
 
-  // --- READ SAVED CAR MAC FROM NVS WITH STRICT VALIDATION ---
+  // --- READ SAVED CAR MAC FROM NVS WITH FULL DEBUG TRACE ---
   bool hasValidBinding = false;
-  preferences.begin("rc-config", true);
+  Serial.println("[DEBUG-NVS] Attempting to open preferences namespace 'rc-config'...");
   
+  preferences.begin("rc-config", true);
   if (preferences.isKey("mac")) {
+    Serial.println("[DEBUG-NVS] Key 'mac' found in NVS.");
     String savedMac = preferences.getString("mac", "");
+    Serial.printf("[DEBUG-NVS] Raw string read from NVS: '%s' (Length: %d)\n", savedMac.c_str(), savedMac.length());
     
-    // Clear out the array first to prevent garbage data
     memset(BindingMac, 0, 6);
-    
     int matchedBytes = sscanf(savedMac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
                               &BindingMac[0], &BindingMac[1], &BindingMac[2],
                               &BindingMac[3], &BindingMac[4], &BindingMac[5]);
                               
-    // Verify we successfully parsed all 6 bytes and it's not a dummy all-zero address
+    Serial.printf("[DEBUG-NVS] sscanf parsed %d matched bytes.\n", matchedBytes);
+    
     if (matchedBytes == 6) {
       if (!(BindingMac[0] == 0 && BindingMac[1] == 0 && BindingMac[2] == 0 && 
             BindingMac[3] == 0 && BindingMac[4] == 0 && BindingMac[5] == 0)) {
-        Serial.printf("[INIT-NORM] Loaded Car MAC from NVS: %s\n", savedMac.c_str());
+        Serial.printf("[INIT-NORM] Loaded Car MAC from NVS successfully: %s\n", savedMac.c_str());
         hasValidBinding = true;
       } else {
-        Serial.println("[WARN] Saved car MAC is all zeros (invalid binding).");
+        Serial.println("[WARN] Saved car MAC consists entirely of zero bytes!");
       }
     } else {
-      Serial.println("[WARN] Saved car MAC failed to parse 6 valid hex bytes!");
+      Serial.println("[WARN] Saved car MAC failed to parse 6 hex bytes!");
     }
   } else {
-    Serial.println("[WARN] No saved car MAC found in NVS.");
+    Serial.println("[WARN] Key 'mac' does NOT exist in NVS. (Fresh web flash or uninitialized storage).");
   }
   preferences.end();
 
   // --- AUTOMATIC DYNAMIC CHANNEL CALCULATION (Matches Car Logic) ---
   uint8_t baseMac[6];
   WiFi.macAddress(baseMac);
+  Serial.printf("[DEBUG-WIFI] Controller Base MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
+                
   uint8_t calculatedChannel = 1;
   uint8_t macRemainder = baseMac[5] % 3; 
   if (macRemainder == 1)      calculatedChannel = 6;
@@ -54,16 +63,21 @@ void setupNormalMode() {
   
   Serial.printf("[INIT-NORM] Controller MAC loaded. Calculated Channel -> Channel %d\n", calculatedChannel);
 
+  // --- ESP-NOW INIT ---
+  Serial.println("[DEBUG-ESPNOW] Initializing ESP-NOW...");
   if (esp_now_init() != ESP_OK) {
     displayMsg("ESPNOW FAIL");
     Serial.println("[ERR] ESP-NOW initialization crashed in drive mode setup!");
     return;
   }
+  Serial.println("[DEBUG-ESPNOW] ESP-NOW initialized successfully.");
+  
   WiFi.setSleep(true);
   esp_wifi_set_channel(calculatedChannel, WIFI_SECOND_CHAN_NONE);
  
   // --- REGISTER CAR PEER USING LOADED MAC ---
   if (hasValidBinding) {
+    Serial.println("[DEBUG-PEER] Attempting to register stored car peer...");
     esp_now_peer_info_t peerInfo = {};
     memset(&peerInfo, 0, sizeof(peerInfo));
     memcpy(peerInfo.peer_addr, BindingMac, 6);
@@ -76,6 +90,8 @@ void setupNormalMode() {
     } else {
       Serial.println("[INIT-NORM] Car peer registered successfully.");
     }
+  } else {
+    Serial.println("[DEBUG-PEER] Skipping peer registration because no valid binding was found.");
   }
 
   // --- REGISTER COMMUNICATION CALLBACKS ---
@@ -95,14 +111,18 @@ void setupNormalMode() {
     }
   });
 
-  // --- FINAL DISPLAY & STATE ROUTING ---
+  // --- FINAL ROUTING & DIAGNOSTIC NOTICE ---
   if (hasValidBinding) {
     Serial.println("[INIT-NORM] Valid binding found in memory. Bypassing pairing screen.");
-    // Clear any lingering waiting text on screen if your display library supports it
+    Serial.println("[DEBUG-BOOT] Controller entering normal operational loop.");
   } else {
-    Serial.println("[INIT-NORM] No valid binding found. Entering waiting/pairing state.");
+    Serial.println("==================================================");
+    Serial.println("[NOTICE] Fresh deployment detected or NVS was cleared.");
+    Serial.println("[NOTICE] ACTION REQUIRED: You must rebind with the car.");
+    Serial.println("==================================================");
     displayMsg("WAITING");
   }
   
   Serial.println("[INIT-NORM] Controller normal drive environment initialized successfully.");
+  Serial.println("[DEBUG-BOOT] ========================================\n");
 }
