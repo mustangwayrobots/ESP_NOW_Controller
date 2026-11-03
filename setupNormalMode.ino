@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * setupNormalMode.ino (Controller - Persistent Binding & Web Flash Reset Handler)
+ * setupNormalMode.ino (Controller - Robust NVS MAC Verification)
  * ==============================================================================
  */
 
@@ -13,23 +13,34 @@ void setupNormalMode() {
   WiFi.mode(WIFI_STA);
   WiFi.setTxPower(WIFI_POWER_8_5dBm); // Set optimized transmit power
 
-  // --- READ SAVED CAR MAC FROM NVS ---
+  // --- READ SAVED CAR MAC FROM NVS WITH STRICT VALIDATION ---
   bool hasValidBinding = false;
   preferences.begin("rc-config", true);
+  
   if (preferences.isKey("mac")) {
     String savedMac = preferences.getString("mac", "");
-    // Strict validation: must be 17 chars, contain colons, and not be empty/null/zeros
-    if (savedMac.length() == 17 && savedMac.indexOf(':') == 2 && savedMac != "00:00:00:00:00:00") {
-      sscanf(savedMac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-             &BindingMac[0], &BindingMac[1], &BindingMac[2],
-             &BindingMac[3], &BindingMac[4], &BindingMac[5]);
-      Serial.printf("[INIT-NORM] Loaded Car MAC from NVS: %s\n", savedMac.c_str());
-      hasValidBinding = true;
+    
+    // Clear out the array first to prevent garbage data
+    memset(BindingMac, 0, 6);
+    
+    int matchedBytes = sscanf(savedMac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+                              &BindingMac[0], &BindingMac[1], &BindingMac[2],
+                              &BindingMac[3], &BindingMac[4], &BindingMac[5]);
+                              
+    // Verify we successfully parsed all 6 bytes and it's not a dummy all-zero address
+    if (matchedBytes == 6) {
+      if (!(BindingMac[0] == 0 && BindingMac[1] == 0 && BindingMac[2] == 0 && 
+            BindingMac[3] == 0 && BindingMac[4] == 0 && BindingMac[5] == 0)) {
+        Serial.printf("[INIT-NORM] Loaded Car MAC from NVS: %s\n", savedMac.c_str());
+        hasValidBinding = true;
+      } else {
+        Serial.println("[WARN] Saved car MAC is all zeros (invalid binding).");
+      }
     } else {
-      Serial.println("[WARN] Saved car MAC in NVS is malformed or empty!");
+      Serial.println("[WARN] Saved car MAC failed to parse 6 valid hex bytes!");
     }
   } else {
-    Serial.println("[WARN] No saved car MAC found in NVS (Likely a fresh Web Flash wipe).");
+    Serial.println("[WARN] No saved car MAC found in NVS.");
   }
   preferences.end();
 
@@ -51,7 +62,7 @@ void setupNormalMode() {
   WiFi.setSleep(true);
   esp_wifi_set_channel(calculatedChannel, WIFI_SECOND_CHAN_NONE);
  
-  // --- REGISTER CAR PEER USING LOADED MAC (Only if valid binding exists) ---
+  // --- REGISTER CAR PEER USING LOADED MAC ---
   if (hasValidBinding) {
     esp_now_peer_info_t peerInfo = {};
     memset(&peerInfo, 0, sizeof(peerInfo));
@@ -84,9 +95,10 @@ void setupNormalMode() {
     }
   });
 
-  // --- CONDITIONAL STATE CHECK ---
+  // --- FINAL DISPLAY & STATE ROUTING ---
   if (hasValidBinding) {
     Serial.println("[INIT-NORM] Valid binding found in memory. Bypassing pairing screen.");
+    // Clear any lingering waiting text on screen if your display library supports it
   } else {
     Serial.println("[INIT-NORM] No valid binding found. Entering waiting/pairing state.");
     displayMsg("WAITING");
