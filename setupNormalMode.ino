@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * setupNormalMode.ino (Clean & Lightweight Architecture)
+ * setupNormalMode.ino (Clean & Lightweight Architecture)  
  * ==============================================================================
  */
 
