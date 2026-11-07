@@ -7,7 +7,8 @@ void setupBindingMode() {
   Serial.println("[INIT-BIND] Configuring controller radio layers for pairing...");
   
   WiFi.mode(WIFI_STA);
-  WiFi.setTxPower(WIFI_POWER_11dBm); // Set optimized transmit power
+  WiFi.setTxPower(WIFI_POWER_19_5dBm); // Set optimized transmit power
+// esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR); // <-- ADD THIS LINE HERE
   Serial.print("[INIT-BIND] Controller MAC: "); Serial.println(WiFi.macAddress());
 
   if (esp_now_init() != ESP_OK) {
@@ -15,7 +16,7 @@ void setupBindingMode() {
     ESP.restart();
   }
   
-  esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE); // Channel 1 for pairing
+//  esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE); // Channel 1 for pairing
   Serial.println("[INIT-BIND] ESP-NOW initialized successfully on Station Channel 1.");
 
   uint8_t broadTarget[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};

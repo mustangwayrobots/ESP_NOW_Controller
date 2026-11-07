@@ -18,9 +18,8 @@ void loopNormalMode() {
     delay(10); 
     return;    
   }
-
-  // 3. --- SEND-ACK CONNECTION WATCHDOG ---
-  if (millis() - lastSendAckTime > 1000) {
+// 3. --- SEND-ACK CONNECTION WATCHDOG ---
+  if (millis() - lastSendAckTime > 500) {
     TXConnectionStatus = false;
   } else {
     TXConnectionStatus = true;
@@ -33,16 +32,16 @@ void loopNormalMode() {
     // WAITING: Low contrast (40) and blink mode 2
     displayMsg("WAITING", 40, 2);
 
-    // Drop transmission attempts to twice a second (500ms) while disconnected to save power
+    // Drop transmission attempts to 100ms while disconnected to sync with car's 250ms timeout
     static unsigned long lastWaitingSend = 0;
-    if (millis() - lastWaitingSend > 500) {
+    if (millis() - lastWaitingSend > 100) {
       lastWaitingSend = millis();
       CalculateMotorDriverValues(joystickX, joystickY);
     }
 
-    delay(50); 
+    delay(1); 
     return; 
-  } else {
+    } else {
     // Convert millivolts to Volts (e.g., 4100 -> 4.1V)
     float voltage = ReceivingData.battery / 1000.0;
 
