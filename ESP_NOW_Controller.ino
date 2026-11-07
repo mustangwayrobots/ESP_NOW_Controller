@@ -10,24 +10,14 @@
 #include <Wire.h>
 #include <U8g2lib.h>
 #include "ConfigData.h"
+#include "HardwareConfig.h" // Pulls in version-specific pin maps
 #include "songs2.h"
 
 Preferences preferences;
 
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
-#define DEBUG_SERIAL_OUTPUT true  // Set to true only when troubleshooting inputs/radio
-#define WIFI_CHANNEL 1
 
-// Correct GPIO Pin Definitions (Avoiding bootstrap pins 2 & 9)
-#define JOYSTICK_HORZ_PIN 3  
-#define JOYSTICK_VERT_PIN 4  
-#define MENU_BUTTON_PIN   10 
-#define SELECT_BUTTON_PIN 8  
-#define SEL_BUTTON_PIN    7  
-#define UP_BUTTON_PIN     1  
-#define DOWN_BUTTON_PIN   0  
-#define PIEZO_PIN         20 
 
 boolean NormalMode = true;
 boolean TXConnectionStatus = false;

@@ -9,7 +9,8 @@ void setupNormalMode() {
   Serial.println("[INIT-NORM] Entering normal drive mode setup...");
   
   WiFi.mode(WIFI_STA);
-  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);
+//  esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR); // Enable Long Range mode
 
   // --- CHECK IF BINDING MAC IS VALID (Loaded previously by main setup) ---
   bool hasValidBinding = false;
