@@ -1,16 +1,13 @@
 {
   "name": "ESP32 Robot Firmware",
-  "version": "Build: 2026-11-03 04:32 UTC",
+  "version": "Build: 2026-11-02 23:53 UTC",
   "home_assistant_domain": "esp_web_tools",
   "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-C3",
       "parts": [
-        {
-          "path": "../firmware.bin",
-          "offset": 0
-        }
+        { "path": "../firmware.bin", "offset": 0 }
       ]
     }
   ]
