@@ -1,7 +1,11 @@
-# Compiled binaries and temporary build folders
+# Directories not part of Arduino IDE coding workspace
 build/
+flash/
+images/
+
+# Local Arduino build outputs & metadata
 *.hex
 *.elf
-
-# Allow the web flasher binary to be tracked/deployed
-!firmware.bin
+.DS_Store
+Thumbs.db
+desktop.ini
