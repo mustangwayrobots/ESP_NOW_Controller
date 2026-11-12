@@ -7,14 +7,17 @@
 // Forward declarations
 void runtest();
 void displayHelpScreen(const char *helpText);
+void DisplayParameterValue();
 
 extern boolean InfoModeActive;
 extern int InfoItemIndex;
 
 //**********************************************************************************************
-void SelectButtonPressed(){
-  selectDebounceTime = millis();
-  
+// ==============================================================================
+// MenuActions.ino - Parameter Adjustments and Button Actions
+// ==============================================================================
+
+void SelectButtonPressed() {
   if (InfoModeActive) {
     InfoModeActive = false;
     SelectActive = false;
@@ -22,33 +25,32 @@ void SelectButtonPressed(){
     return;
   }
 
-  if(SelectActive == false){
+  if (SelectActive == false) {
     SelectActive = true;
     
-    if (strcmp(Menu[CurrentMenuItem].label, "INFO / HELP") == 0) {
+    if (CurrentMenuItem == SET_INFO_HELP) {
       InfoModeActive = true;
       InfoItemIndex = 0;
       displayHelpScreen(menuHelpText[InfoItemIndex]);
       return;
     }
 
-    for (int i = 0; i < MENU_ITEMS; i++){
+    for (int i = 0; i < MENU_ITEMS; i++) {
       tempSettings[i] = currentSettings[i];
-      
-      if (strcmp(Menu[CurrentMenuItem].label, "JOYSTICK ZERO-X") == 0 ) {
-        tempSettings[CurrentMenuItem] = analogRead(JOYSTICK_VERT_PIN);                    
-      }
-      if (strcmp(Menu[CurrentMenuItem].label, "JOYSTICK ZERO-Y") == 0 ) {
-        tempSettings[CurrentMenuItem] = analogRead(JOYSTICK_HORZ_PIN);                    
-      }
     }
+
+    // Stick-center items start from the live stick position. joystickX / joystickY
+    // are the same readings the driving code uses, so the saved center always
+    // matches the axis it is applied to (X = forward/back, Y = left/right).
+    if (CurrentMenuItem == SET_ZERO_X) tempSettings[SET_ZERO_X] = joystickX;
+    if (CurrentMenuItem == SET_ZERO_Y) tempSettings[SET_ZERO_Y] = joystickY;
     DisplayParameterValue();
-  }else{
+  } else {
     SelectActive = false;     
     
     preferences.begin("rc-config", false);
-    for (int i = 0; i < MENU_ITEMS; i++){
-      if (strcmp(Menu[CurrentMenuItem].label, "DEFAULTS") == 0 ){
+    for (int i = 0; i < MENU_ITEMS; i++) {
+      if (CurrentMenuItem == SET_DEFAULTS) {
         tempSettings[i] = defaultSettings[i];
       }
       currentSettings[i] = tempSettings[i];
@@ -62,7 +64,7 @@ void SelectButtonPressed(){
     Serial.println("Settings saved to NVS successfully.");
 #endif
     
-    if (strcmp(Menu[CurrentMenuItem].label, "DEFAULTS") == 0 ){
+    if (CurrentMenuItem == SET_DEFAULTS) {
       displayMsg("RESET OK!", 255, 1);
       delay(1000); 
       MenuActive = false; 
@@ -70,7 +72,7 @@ void SelectButtonPressed(){
       return;
     }
     
-    if (strcmp(Menu[CurrentMenuItem].label, "TEST TRIM") == 0){      
+    if (CurrentMenuItem == SET_TEST_TRIM) {      
 #if DEBUG_SERIAL_OUTPUT
       Serial.println("Running trim test...");
 #endif
@@ -81,24 +83,22 @@ void SelectButtonPressed(){
 }
 
 //**********************************************************************************************
-void AdjustParameterValues(){
+void AdjustParameterValues() {
   if (InfoModeActive) {
     HandleHelpNavigation(); // Defined in MenuHelp.ino
     return;
   }
 
   int stepSize = 1;
-  if (strcmp(Menu[CurrentMenuItem].label, "JOYSTICK ZERO-X") == 0 || 
-      strcmp(Menu[CurrentMenuItem].label, "JOYSTICK ZERO-Y") == 0) {
-    stepSize = 1; 
-  }
+  // (Every setting steps by 1 for now. To make one step faster, e.g. the
+  //  stick-center items, change stepSize here based on CurrentMenuItem.)
 
-  if (UpButton == true && (millis() - navDebounceTime) > 150){
+  if (UpButton == true && (millis() - navDebounceTime) > 150) {
     navDebounceTime = millis();
     tempSettings[CurrentMenuItem] = constrain(tempSettings[CurrentMenuItem] + stepSize, Menu[CurrentMenuItem].min, Menu[CurrentMenuItem].max);
     DisplayParameterValue();
   }
-  if (DownButton == true && (millis() - navDebounceTime) > 150){
+  if (DownButton == true && (millis() - navDebounceTime) > 150) {
     navDebounceTime = millis();
     tempSettings[CurrentMenuItem] = constrain(tempSettings[CurrentMenuItem] - stepSize, Menu[CurrentMenuItem].min, Menu[CurrentMenuItem].max);
     DisplayParameterValue();
@@ -106,35 +106,35 @@ void AdjustParameterValues(){
 }
 
 //**********************************************************************************************
-void DisplayParameterValue(){
+void DisplayParameterValue() {
   char buf2[50];
-  if(strcmp(Menu[CurrentMenuItem].label, "TEST TRIM") == 0 ){
-    sprintf (buf2, "%2i sec", tempSettings[CurrentMenuItem]);        
-    displayMsg(buf2, 255, 1);  
-  }else if(strcmp(Menu[CurrentMenuItem].label, "MAX SPEED") == 0 ||
-           strcmp(Menu[CurrentMenuItem].label, "SPIN SPEED") == 0 ||
-           strcmp(Menu[CurrentMenuItem].label, "STEER RATE") == 0 ||
-           strcmp(Menu[CurrentMenuItem].label, "STEER EXPO") == 0 ||
-           strcmp(Menu[CurrentMenuItem].label, "ACCEL RATE") == 0 ){
-    sprintf (buf2, "%3i%%", tempSettings[CurrentMenuItem]); 
+  if (CurrentMenuItem == SET_TEST_TRIM) {
+    sprintf (buf2, "%2i sec", tempSettings[CurrentMenuItem]);
     displayMsg(buf2, 255, 1);
-  }else if(strcmp(Menu[CurrentMenuItem].label, "WEAPON ON VALUE") == 0 ||
-           strcmp(Menu[CurrentMenuItem].label, "WEAPON OFF VALUE") == 0 ){
-    sprintf (buf2, "%3i deg", tempSettings[CurrentMenuItem]); 
+  } else if (CurrentMenuItem == SET_MAX_SPEED ||
+             CurrentMenuItem == SET_SPIN_SPEED ||
+             CurrentMenuItem == SET_STEER_RATE ||
+             CurrentMenuItem == SET_STEER_EXPO ||
+             CurrentMenuItem == SET_ACCEL_RATE) {
+    sprintf (buf2, "%3i%%", tempSettings[CurrentMenuItem]);
     displayMsg(buf2, 255, 1);
-  }else if(strcmp(Menu[CurrentMenuItem].label, "MOTOR \"A\" DIRECTION") == 0 ||
-           strcmp(Menu[CurrentMenuItem].label, "MOTOR \"B\" DIRECTION") == 0 ||
-           strcmp(Menu[CurrentMenuItem].label, "MOTOR A-B RIGHT-LEFT")  == 0 ){
-    if(tempSettings[CurrentMenuItem] == 0) displayMsg("NORMAL", 255, 1);
-    if(tempSettings[CurrentMenuItem] == 1) displayMsg("REVERSE", 255, 1);
-  }else if(strcmp(Menu[CurrentMenuItem].label, "DEFAULTS") == 0 ){
-    displayMsg("CONFIRM", 255, 1);      
-  }else if(strcmp(Menu[CurrentMenuItem].label, "POWER ON TUNE") == 0 ){    
-    char* copy = strdup(songs2[tempSettings[CurrentMenuItem]]);   
-    displayMsg(strtok(copy,":"), 255, 1);   
-    free(copy);   
-  }else{ 
+  } else if (CurrentMenuItem == SET_WEAPON_ON ||
+             CurrentMenuItem == SET_WEAPON_OFF) {
+    sprintf (buf2, "%3i deg", tempSettings[CurrentMenuItem]);
+    displayMsg(buf2, 255, 1);
+  } else if (CurrentMenuItem == SET_MOTOR_A_DIR ||
+             CurrentMenuItem == SET_MOTOR_B_DIR ||
+             CurrentMenuItem == SET_MOTOR_SWAP) {
+    if (tempSettings[CurrentMenuItem] == 0) displayMsg("NORMAL", 255, 1);
+    if (tempSettings[CurrentMenuItem] == 1) displayMsg("REVERSE", 255, 1);
+  } else if (CurrentMenuItem == SET_DEFAULTS) {
+    displayMsg("CONFIRM", 255, 1);
+  } else if (CurrentMenuItem == SET_POWER_ON_TUNE) {
+    char* copy = strdup(songs2[tempSettings[CurrentMenuItem]]);
+    displayMsg(strtok(copy,":"), 255, 1);
+    free(copy);
+  } else {
     sprintf (buf2, "%5i", tempSettings[CurrentMenuItem]);
-    displayMsg(buf2, 255, 1);      
-  }    
+    displayMsg(buf2, 255, 1);
+  }
 }

@@ -1,137 +1,128 @@
 /**
  * ==============================================================================
- * MotorControl.ino - Clean Arcade Drive, Spin-on-Demand, and Independent Trim
+ * MotorControl.ino - Arcade Drive Mixing, Trim, Ramping, and Weapon Control
  * ==============================================================================
  */
+
+// Reference variables from ESP_NOW_Controller.ino
+extern unsigned long lastSendTime;
+extern int currentSendInterval;
+extern unsigned long lastSendAckTime;
+
 void CalculateMotorDriverValues(int rawX, int rawY) {
-  // --- 1. AXIS MAPPING ---
-  int throttle = -rawY; 
-  int steering = rawX;
+  // 1. Retrieve settings from the named list (see SettingId in ConfigData.h)
+  int maxSpeed    = currentSettings[SET_MAX_SPEED];
+  int forwardTrim = currentSettings[SET_FORWARD_TRIM];
+  int reverseTrim = currentSettings[SET_REVERSE_TRIM];
+  int steerRate   = currentSettings[SET_STEER_RATE];
+  int steerExpo   = currentSettings[SET_STEER_EXPO];
+  int spinSpeed   = currentSettings[SET_SPIN_SPEED];
+  int motorADir   = currentSettings[SET_MOTOR_A_DIR];
+  int motorBDir   = currentSettings[SET_MOTOR_B_DIR];
+  int motorSwap   = currentSettings[SET_MOTOR_SWAP];
+  int weaponOnVal = currentSettings[SET_WEAPON_ON];
+  int deadzone    = currentSettings[SET_DEADZONE];
+  int centerX     = currentSettings[SET_ZERO_X];   // stick center, calibrated in the menu
+  int centerY     = currentSettings[SET_ZERO_Y];
+  if (deadzone < 50) deadzone = 50; // Enforce safe minimum deadzone for high-count ADCs
 
-  // --- 2. EXTRACT CONFIGURATION SETTINGS (Name-Based Lookups) ---
-  int MaxSpeed    = map(getSetting("MAX SPEED"), 0, 100, 0, 255); 
-  int ForwardTrim = getSetting("FORWARD TRIM");                      
-  int ReverseTrim = getSetting("REVERSE TRIM");                      
-  int rampStep    = map(getSetting("ACCEL RATE"), 0, 100, 5, 127); 
-  int DeadZone    = getSetting("JOYSTICK DEADZONE");                 
-  
-  float steerRatePct = getSetting("STEER RATE") / 100.0; 
-  float steerExpoPct = getSetting("STEER EXPO") / 100.0; 
-  
-  int spinSpeed = map(getSetting("SPIN SPEED"), 0, 100, 0, 255);
+  // 2. Axis Mapping (Swapped RawX/RawY based on physical board wiring)
+  int throttle = -(rawX - centerX);
+  int steering = rawY - centerY;
 
-  // --- 3. APPLY DEADZONE ---
-  if (abs(throttle) < DeadZone) throttle = 0;
-  if (abs(steering) < DeadZone) steering = 0;
+  // 3. Strict Center Deadzone
+  if (abs(throttle) < deadzone) throttle = 0;
+  if (abs(steering) < deadzone) steering = 0;
 
-  int leftDriveSpeed = 0;
-  int rightDriveSpeed = 0;
+  bool isActivelyDriving = (throttle != 0 || steering != 0);
 
-  // --- 4. SPIN-ON-DEMAND VS NORMAL ARCADE DRIVE ---
+  int leftPWM = 0;
+  int rightPWM = 0;
+
+  // 4. Spin-on-Demand (if SpinButton is held)
   if (SpinButton) {
-    if (abs(steering) > DeadZone) {
-      if (steering > 0) {
-        leftDriveSpeed  = spinSpeed;
-        rightDriveSpeed = -spinSpeed;
-      } else {
-        leftDriveSpeed  = -spinSpeed;
-        rightDriveSpeed = spinSpeed;
-      }
+    int spinPwm = map(spinSpeed, 0, 100, 0, 255);
+    if (steering > 0) {
+      leftPWM = spinPwm;
+      rightPWM = -spinPwm;
+    } else if (steering < 0) {
+      leftPWM = -spinPwm;
+      rightPWM = spinPwm;
     } else {
-      leftDriveSpeed  = 0;
-      rightDriveSpeed = 0;
+      leftPWM = 0;
+      rightPWM = 0;
     }
   } else {
-    int throttleVal = map(throttle, -1023, 1023, -MaxSpeed, MaxSpeed);
+    // 5. Arcade Drive Mixing with Steering Expo & Rate
+    float throttleScaled = (throttle / 1800.0) * (maxSpeed * 255.0 / 100.0);
+    
+    float steeringNorm = steering / 1800.0;
+    float cubicSteering = steeringNorm * steeringNorm * steeringNorm;
+    float blendedSteering = (steeringNorm * (1.0 - (steerExpo / 100.0))) + (cubicSteering * (steerExpo / 100.0));
+    
+    float steeringScaled = blendedSteering * (maxSpeed * 255.0 / 100.0) * (steerRate / 100.0);
 
-    float normSteer = steering / 1023.0;
-    float cubicSteer = normSteer * normSteer * normSteer;
-    float blendedSteer = ((1.0 - steerExpoPct) * normSteer) + (steerExpoPct * cubicSteer);
+    float rawLeft = throttleScaled + steeringScaled;
+    float rawRight = throttleScaled - steeringScaled;
 
-    int maxSteeringCap = (int)(MaxSpeed * steerRatePct);
-    int steeringVal = (int)(blendedSteer * maxSteeringCap);
-
-    leftDriveSpeed  = throttleVal + steeringVal;
-    rightDriveSpeed = throttleVal - steeringVal;
-
-    // --- INDEPENDENT DIRECTIONAL TRIM ---
-    int activeTrim = ForwardTrim;
-    if (throttleVal < 0) {
-      activeTrim = ReverseTrim; 
+    // 6. Directional Trim (C-07 Fix: Only applied when actively driving)
+    if (isActivelyDriving) {
+      if (throttle >= 0) {
+        if (forwardTrim > 0) rawLeft -= forwardTrim;
+        else if (forwardTrim < 0) rawRight -= abs(forwardTrim);
+      } else {
+        if (reverseTrim > 0) rawLeft -= reverseTrim;
+        else if (reverseTrim < 0) rawRight -= abs(reverseTrim);
+      }
     }
 
-    if (activeTrim > 0) {
-      leftDriveSpeed = constrain(leftDriveSpeed - activeTrim, -255, 255);
-    } else if (activeTrim < 0) {
-      rightDriveSpeed = constrain(rightDriveSpeed + activeTrim, -255, 255);
-    }
+    leftPWM = constrain((int)rawLeft, -255, 255);
+    rightPWM = constrain((int)rawRight, -255, 255);
   }
 
-  leftDriveSpeed  = constrain(leftDriveSpeed, -255, 255);
-  rightDriveSpeed = constrain(rightDriveSpeed, -255, 255);
+  // 7. Jitter Floor (values below 15 become 0)
+  if (abs(leftPWM) < 15) leftPWM = 0;
+  if (abs(rightPWM) < 15) rightPWM = 0;
 
-  // --- 5. TRANSIENT INERTIA SMOOTHING ---
-  static int prevLeft = 0;
-  static int prevRight = 0;
-  
-  leftDriveSpeed  = constrain(leftDriveSpeed, prevLeft - rampStep, prevLeft + rampStep);
-  rightDriveSpeed = constrain(rightDriveSpeed, prevRight - rampStep, prevRight + rampStep);
-  
-  prevLeft = leftDriveSpeed;
-  prevRight = rightDriveSpeed;
-
-  // --- 6. JITTER FLOOR ---
-  if (abs(leftDriveSpeed) < 15)  leftDriveSpeed = 0;
-  if (abs(rightDriveSpeed) < 15) rightDriveSpeed = 0;
-
-  // --- 7. Convert Wheel Speed to PWM PIN Values ---
+  // 8. Convert Sign-Magnitude to DRV8833 Dual-Pin PWM Inputs (A1/A2, B1/B2)
   int a1 = 0, a2 = 0, b1 = 0, b2 = 0;
 
-  if (leftDriveSpeed > 0) {
-    a1 = leftDriveSpeed;  
-    a2 = 0;               
-  } else if (leftDriveSpeed < 0) {
-    a1 = 0;               
-    a2 = -leftDriveSpeed; 
+  if (leftPWM > 0) {
+    a1 = leftPWM;
+    a2 = 0;
+  } else if (leftPWM < 0) {
+    a1 = 0;
+    a2 = abs(leftPWM);
   }
 
-  if (rightDriveSpeed > 0) {
-    b1 = rightDriveSpeed; 
-    b2 = 0;               
-  } else if (rightDriveSpeed < 0) {
-    b1 = 0;               
-    b2 = -rightDriveSpeed;
+  if (rightPWM > 0) {
+    b1 = rightPWM;
+    b2 = 0;
+  } else if (rightPWM < 0) {
+    b1 = 0;
+    b2 = abs(rightPWM);
   }
 
-  SendingData.motor_A1 = a1;
-  SendingData.motor_A2 = a2;
-  SendingData.motor_B1 = b1;
-  SendingData.motor_B2 = b2;
+  // 9. Motor Direction Reversal & Channel Swapping
+  if (motorADir == 1) { int temp = a1; a1 = a2; a2 = temp; }
+  if (motorBDir == 1) { int temp = b1; b1 = b2; b2 = temp; }
 
-  // --- 8. HARDWARE CONFIGURATION OVERRIDES (Name-Based Lookups) ---
-  int tempHolding;
-  if (getSetting("MOTOR \"A\" DIRECTION") != 0){ 
-    tempHolding = SendingData.motor_A1;
-    SendingData.motor_A1 = SendingData.motor_A2;
-    SendingData.motor_A2 = tempHolding;
-  }
-  if (getSetting("MOTOR \"B\" DIRECTION") != 0){ 
-    tempHolding = SendingData.motor_B1;
-    SendingData.motor_B1 = SendingData.motor_B2;
-    SendingData.motor_B2 = tempHolding;
-  }
-  if (getSetting("MOTOR A-B RIGHT-LEFT") != 0){ 
-    tempHolding = SendingData.motor_A1;
-    SendingData.motor_A1 = SendingData.motor_B1; 
-    SendingData.motor_B1 = tempHolding; 
-    tempHolding = SendingData.motor_A2;
-    SendingData.motor_A2 = SendingData.motor_B2; 
-    SendingData.motor_B2 = tempHolding; 
+  if (motorSwap == 1) {
+    SendingData.motor_A1 = b1;
+    SendingData.motor_A2 = b2;
+    SendingData.motor_B1 = a1;
+    SendingData.motor_B2 = a2;
+  } else {
+    SendingData.motor_A1 = a1;
+    SendingData.motor_A2 = a2;
+    SendingData.motor_B1 = b1;
+    SendingData.motor_B2 = b2;
   }
 
-  // --- 9. WEAPON STATE HANDLING (Name-Based Lookups) ---
-  if(UpButton == false) SendingData.weapon = getSetting("WEAPON ON VALUE"); 
-  if(UpButton == true) SendingData.weapon = map(getSetting("SPIN SPEED"), 0, 100, 0, 127); 
-
-  SendData(); 
+  // 10. Weapon Control Logic
+  if (UpButton) {
+    SendingData.weapon = map(spinSpeed, 0, 100, 0, 180);
+  } else {
+    SendingData.weapon = weaponOnVal;
+  }
 }

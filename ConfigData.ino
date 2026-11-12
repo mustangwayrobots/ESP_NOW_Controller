@@ -27,6 +27,9 @@ menuStruct Menu[] = {
   {"INFO / HELP", 0, 0}               // Index 18: Help Screen Viewer
 };
 
+// Compile-time safety check: the Menu table must have one row per SettingId in ConfigData.h
+static_assert(sizeof(Menu) / sizeof(Menu[0]) == MENU_ITEMS, "Menu[] rows do not match the SettingId list in ConfigData.h");
+
 // Factory Default Settings Array
 int defaultSettings[MENU_ITEMS] = {
   100,  // MAX SPEED (%)
@@ -70,8 +73,8 @@ const char* const menuHelpText[] = {
   "WEAPON OFF: Idle Servo angle (deg).",
   "TEST TRIM: Timer to run Fwd & REV.",
   "DEADZONE: Ignores stick drift at center.",
-  "ZERO-X: Calibrates vert. joystick center value.",
-  "ZERO-Y: Calibrates horiz. joystick center value.",
+  "ZERO-X: Fwd/back stick center.",
+  "ZERO-Y: Left/right stick center.",
   "STARTUP TUNE: Power on Melody (0-93).",
   "DEFAULTS: Restores factory defaults.",
   "INFO/HELP: Menu Options Definitions."
@@ -80,13 +83,3 @@ const char* const menuHelpText[] = {
 // --- ESP-NOW Global Packet Instances ---
 RC_Packet_Structure SendingData;
 RC_Packet_Structure ReceivingData;
-
-// --- Name-Based Setting Lookup Helper ---
-int getSetting(const char* labelName) {
-  for (int i = 0; i < MENU_ITEMS; i++) {
-    if (strcmp(Menu[i].label, labelName) == 0) {
-      return currentSettings[i];
-    }
-  }
-  return 0; // Fallback if not found
-}
