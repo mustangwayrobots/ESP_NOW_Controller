@@ -3,8 +3,6 @@
  * SendData.ino - Zero-Cost ESP-NOW Transmission Using RAM-Cached MAC
  * ==============================================================================
  */
-extern uint8_t cachedCarMac[6];
-
 void SendData() {
   SendingData.protocolMode = 1; // Normal drive packet
   

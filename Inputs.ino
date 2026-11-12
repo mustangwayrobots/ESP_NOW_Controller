@@ -1,22 +1,13 @@
 /**
  * ==============================================================================
- * readInputs.ino - Input Polling, ADC Reads, and Button Edge Detection
+ * Inputs.ino - Input Polling, ADC Reads, and Button Edge Detection
  * ==============================================================================
  */
 
-// External declarations for global flags and pins used across files
-extern int joystickX;
-extern int joystickY;
-extern bool UpButton;
-extern bool DownButton;
-extern bool SpinButton;
-extern bool MenuButtonTriggered;
-extern bool SelectButtonTriggered;
-
 void readInputs() {
-  // Read raw joystick axes (12-bit ADC)
-  joystickX = analogRead(JOYSTICK_HORZ_PIN);
-  joystickY = analogRead(JOYSTICK_VERT_PIN);
+  // Read raw stick axes (12-bit ADC, 0-4095)
+  stickThrottle = analogRead(JOYSTICK_THROTTLE_PIN);   // forward/back
+  stickSteer    = analogRead(JOYSTICK_STEER_PIN);      // left/right
 
   // Read action buttons (active LOW with internal pull-ups)
   UpButton = (digitalRead(UP_BUTTON_PIN) == LOW);
@@ -24,7 +15,7 @@ void readInputs() {
   SpinButton = (digitalRead(SPIN_BUTTON_PIN) == LOW);
 
   // --- Menu Button Press-Edge Detection (C-11 Fix) ---
-  static bool lastMenuRawState = HIGH; 
+  static bool lastMenuRawState = HIGH;
   bool currentMenuRawState = digitalRead(MENU_BUTTON_PIN);
 
   MenuButtonTriggered = false;
@@ -32,7 +23,7 @@ void readInputs() {
     static unsigned long lastMenuPressTime = 0;
     if (millis() - lastMenuPressTime > 200) {
       lastMenuPressTime = millis();
-      MenuButtonTriggered = true; 
+      MenuButtonTriggered = true;
     }
   }
   lastMenuRawState = currentMenuRawState;
@@ -50,4 +41,4 @@ void readInputs() {
     }
   }
   lastSelectRawState = currentSelectRawState;
-}
+}

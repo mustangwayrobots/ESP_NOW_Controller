@@ -2,19 +2,18 @@
 // loopNormalMode.ino - Normal Driving Loop & Connection State Management
 // ==============================================================================
 
-// Reference external send-ack watchdog tracker from setupNormalMode.ino   
-extern unsigned long lastSendAckTime;
-
-// Reference adaptive rate tracking variables from ESP_NOW_Controller.ino
-extern unsigned long lastSendTime;
-extern int currentSendInterval;
-
-// Reference cached car MAC for auto-reconnection peer checks
-extern uint8_t cachedCarMac[6];
-
 void loopNormalMode() {
   // 1. ALWAYS read inputs first so button states are fresh on every loop cycle
-  readInputs();  
+  readInputs();
+
+#if DEBUG_SERIAL_OUTPUT
+  // Raw stick readings 5 times a second (set DEBUG_SERIAL_OUTPUT true in HardwareConfig.h)
+  static unsigned long lastDebugPrint = 0;
+  if (millis() - lastDebugPrint > 200) {
+    lastDebugPrint = millis();
+    Serial.printf("stick raw: throttle=%d steer=%d\n", stickThrottle, stickSteer);
+  }
+#endif
 
   // 2. Check the menu next. If active, run ONLY the menu and stop everything else.
   if (ActiveMenu() == true) {
@@ -23,23 +22,33 @@ void loopNormalMode() {
   }
 
   // 3. --- SEND-ACK CONNECTION WATCHDOG ---
-  if (millis() - lastSendAckTime > 500) {
+  if (millis() - lastSendAckTime > CONNECTION_TIMEOUT_MS) {
     TXConnectionStatus = false;
   } else {
     TXConnectionStatus = true;
   }
 
+  static uint8_t channel = getRadioChannel();
+  char chText[8];
+  snprintf(chText, sizeof(chText), "CH %d", channel);
+
   // 4. --- WAITING STATE & AUTO-RECONNECTION ---
   if (TXConnectionStatus == false) {
     Beep(1000, 10000, 100); // 1000Hz tone, 10-second period, 100ms duration
     
-    // WAITING: Low contrast (40) and blink mode 2
-    displayMsg("WAITING", 40, 2);
+    if (carPaired) showStatus("NO SIGNAL", chText, "Waiting", "Turn on the car");
+    else           showStatus("NOT PAIRED", chText, "No car", "Hold MENU at power on");
 
     // Periodically re-add the peer every 2 seconds while waiting, 
     // allowing the controller to connect even if the car is turned on later!
+    // Not paired: nothing to talk to, so skip the peer and the sends
+    if (!carPaired) {
+      delay(1);
+      return;
+    }
+
     static unsigned long lastPeerCheck = 0;
-    if (millis() - lastPeerCheck > 2000) {
+    if (millis() - lastPeerCheck > PEER_RECHECK_MS) {
       lastPeerCheck = millis();
       
       esp_now_peer_info_t peerInfo = {};
@@ -57,27 +66,30 @@ void loopNormalMode() {
 
     // Drop transmission attempts to 100ms while disconnected to sync with car's timeout
     static unsigned long lastWaitingSend = 0;
-    if (millis() - lastWaitingSend > 100) {
+    if (millis() - lastWaitingSend > SEND_INTERVAL_WAITING_MS) {
       lastWaitingSend = millis();
-      CalculateMotorDriverValues(joystickX, joystickY);
+      CalculateMotorDriverValues(stickThrottle, stickSteer);
       SendData(); 
     }
 
     delay(1); 
     return; 
   } else {
-    // Convert millivolts to Volts (e.g., 4100 -> 4.1V)
-    float voltage = ReceivingData.battery / 1000.0;
-
-    char displayBuffer[32];
-    snprintf(displayBuffer, sizeof(displayBuffer), "CONN Bat=%.1fV", voltage);
-    displayMsg(displayBuffer, 40, 1);
+    // Car battery, redrawn at most 4 times a second (each redraw takes ~25 ms)
+    static unsigned long lastDraw = 0;
+    if (millis() - lastDraw > 250) {
+      lastDraw = millis();
+      char big[12];
+      if (ReceivingData.battery > 0) snprintf(big, sizeof(big), "%.2f V", ReceivingData.battery / 1000.0);
+      else                           snprintf(big, sizeof(big), "-.-- V");   // no reading yet
+      showStatus("CONNECTED", chText, big, "Car battery");
+    }
   }
 
   // 5. --- ADAPTIVE PACKET RATE LOGIC ---
   // Work out what we WOULD send, then use that to decide how often to send.
   // (Raw stick values never read zero, so we judge by the finished motor command.)
-  CalculateMotorDriverValues(joystickX, joystickY);
+  CalculateMotorDriverValues(stickThrottle, stickSteer);
 
   bool isActive = (SendingData.motor_A1 != 0) || (SendingData.motor_A2 != 0) ||
                   (SendingData.motor_B1 != 0) || (SendingData.motor_B2 != 0) ||
@@ -90,9 +102,9 @@ void loopNormalMode() {
   wasActive = isActive;
 
   if (isActive) {
-    currentSendInterval = 20;  // Fast 50Hz response when driving
+    currentSendInterval = SEND_INTERVAL_ACTIVE_MS;  // Fast 50Hz response when driving
   } else {
-    currentSendInterval = 100; // Slow 100ms idle heartbeat when parked/steady
+    currentSendInterval = SEND_INTERVAL_IDLE_MS;   // Slow idle heartbeat when parked/steady
   }
 
   // 6. --- TRANSMIT ON ADAPTIVE INTERVAL ---

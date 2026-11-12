@@ -3,8 +3,8 @@
  * setupNormalMode.ino - Controller Normal Mode Setup & Valid Binding Check (C-05)
  * ==============================================================================
  */
-extern uint8_t cachedCarMac[6]; 
 unsigned long lastSendAckTime = 0;
+bool carPaired = false;
 
 void setupNormalMode() {
   Serial.println("[INIT-NORM] Configuring controller normal driving mode...");
@@ -17,23 +17,14 @@ void setupNormalMode() {
 
   Serial.printf("[INIT-NORM] Controller Channel Allocation -> Channel %d\n", calculatedChannel);
 
-  // Load bound car MAC from NVS preferences
-  Preferences prefs;
-  prefs.begin("rc-config", true);
-  bool hasKey = prefs.isKey("mac");
-  String savedMac = prefs.getString("mac", "00:00:00:00:00:00");
-  prefs.end();
-
-  // If no stored MAC key exists or it is empty/zero, force fallback to binding mode or alert user
-  if (!hasKey || savedMac == "00:00:00:00:00:00") {
+  // Load the paired car's MAC from flash (storage.ino)
+  carPaired = readStoredMac(cachedCarMac);
+  if (!carPaired) {
     Serial.println("[WARN] No valid car MAC bound in flash! Please pair controller.");
   }
-
-  sscanf(savedMac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-         &cachedCarMac[0], &cachedCarMac[1], &cachedCarMac[2],
-         &cachedCarMac[3], &cachedCarMac[4], &cachedCarMac[5]);
-
-  Serial.printf("[INIT-NORM] Target Car MAC Cached in RAM: %s\n", savedMac.c_str());
+  Serial.printf("[INIT-NORM] Target Car MAC Cached in RAM: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                cachedCarMac[0], cachedCarMac[1], cachedCarMac[2],
+                cachedCarMac[3], cachedCarMac[4], cachedCarMac[5]);
 
   if (esp_now_init() != ESP_OK) {
     Serial.println("[ERR] ESP-NOW initialization failed!");
@@ -50,7 +41,7 @@ void setupNormalMode() {
   peerInfo.ifidx   = WIFI_IF_STA;
   peerInfo.encrypt = false;
   
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+  if (carPaired && esp_now_add_peer(&peerInfo) != ESP_OK) {
     Serial.println("[WARN] Failed to add car peer or peer already exists.");
   }
 
