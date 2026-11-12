@@ -1,18 +1,25 @@
 // ==============================================================================
-// displayMsg.ino - Display Message Routine with Contrast, Blink, and Font Control
+// displayMsg.ino - Optimized I2C Display Routine (C-03 Bus Optimization)
 // ==============================================================================
 void displayMsg(const char *NewMessage, int contrast, int blinkMode, bool smallFont) {
-  static char currentMessage[50];
+  static char currentMessage[50] = "";
   static uint32_t blinkMillis = 0;
   static boolean displayState = true;
+  static int prevContrast = -1;
+  static int prevPowerSave = -1;
+  
   char *orignal;
   char *token, *theRest;
   String myLine[5];
   
-  // Apply hardware contrast setting
-  u8g2.setContrast(contrast);
+  // 1. I2C Optimization: Only update hardware contrast if the value has changed
+  if (contrast != prevContrast) {
+    prevContrast = contrast;
+    u8g2.setContrast(contrast);
+  }
 
-  // Handle blink duty cycle
+  // 2. Handle blink duty cycle & power save state logic
+  bool targetPowerSave = false;
   if (blinkMode > 1) {
     unsigned long interval = 1000 * (blinkMode - 1); 
     if (millis() - blinkMillis > interval) {
@@ -20,22 +27,30 @@ void displayMsg(const char *NewMessage, int contrast, int blinkMode, bool smallF
       displayState = !displayState;
     }    
     if (!displayState) {
-      u8g2.setPowerSave(1);
-      return;
+      targetPowerSave = true;
     }
   }
-  
-  u8g2.setPowerSave(0);
 
-  if(strcmp(currentMessage, NewMessage) != 0){
+  // Only update I2C power save state if it actually changed
+  if (targetPowerSave != prevPowerSave) {
+    prevPowerSave = targetPowerSave;
+    u8g2.setPowerSave(targetPowerSave ? 1 : 0);
+  }
+
+  // If display is currently blanked by blink mode, skip buffer rendering
+  if (targetPowerSave) {
+    return; 
+  }
+
+  // 3. Only redraw buffer and send I2C frame if the message text has changed
+  if (strcmp(currentMessage, NewMessage) != 0) {
     strcpy(currentMessage, NewMessage);
     
     u8g2.clearBuffer();          
     
     if (smallFont) {
-      // Use a compact 5x8 / 6x10 font for multi-line UI layouts (like Help screens)
       u8g2.setFont(u8g2_font_6x10_tf);
-      u8g2.drawStr(0, 9, currentMessage); // Allows top description row and a bottom footer row
+      u8g2.drawStr(0, 9, currentMessage); 
     } else if (strlen(currentMessage) <= 9){
       u8g2.setFont(u8g2_font_inb16_mr); 
       u8g2.drawStr(0, 24, currentMessage); 

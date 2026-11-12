@@ -1,13 +1,13 @@
-// ==============================================================================
-// SendData.ino - ESP-NOW Packet Transmission Wrapper
-// ==============================================================================
-void SendData(){
-    SendingData.protocolMode = 1; // Normal Drive Mode
-    uint8_t TempData[sizeof(SendingData)];
-    memcpy(TempData, &SendingData, sizeof(SendingData));
-    
-    uint8_t remoteMac[6];
-    if (readStoredMac(remoteMac)) {
-      esp_now_send(remoteMac, TempData, sizeof(TempData));        
-    }
+/**
+ * ==============================================================================
+ * SendData.ino - Zero-Cost ESP-NOW Transmission Using RAM-Cached MAC
+ * ==============================================================================
+ */
+extern uint8_t cachedCarMac[6];
+
+void SendData() {
+  SendingData.protocolMode = 1; // Normal drive packet
+  
+  // Send packet directly using RAM-cached MAC (eliminates flash churn C-02)
+  esp_now_send(cachedCarMac, (uint8_t *)&SendingData, sizeof(SendingData));
 }

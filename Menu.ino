@@ -1,16 +1,18 @@
-// ==============================================================================
-// Menu.ino - Core Menu Navigation and State Management  
-// ==============================================================================
-static uint32_t menuDebounceTime = 0;
-static uint32_t selectDebounceTime = 0;
+/**
+ * ==============================================================================
+ * Menu.ino - Core Menu Navigation and State Management  
+ * ==============================================================================
+ */
 static uint32_t navDebounceTime = 0;
 uint32_t debounceDelay = 200;
 static boolean MenuActive = false;
 static int CurrentMenuItem = 0;
 static boolean SelectActive = false;
 
-// Bring in InfoModeActive from MenuHelp.ino
+// Bring in external flags from other files
 extern boolean InfoModeActive;
+extern bool MenuButtonTriggered;
+extern bool SelectButtonTriggered;
 
 // Forward declarations for functions defined in other menu files
 void SelectButtonPressed();
@@ -19,8 +21,8 @@ void CycleMenuItems();
 
 //**********************************************************************************************
 boolean ActiveMenu(){
-  if (MenuButton == true && (millis() - menuDebounceTime) > debounceDelay){
-    menuDebounceTime = millis();
+  // Check edge-triggered menu flag
+  if (MenuButtonTriggered){
     if(MenuActive == false){
       MenuActive = true;
       CurrentMenuItem = 0;
@@ -36,15 +38,15 @@ boolean ActiveMenu(){
   }  
 
   if(MenuActive == true){
-    if (SelectButton == true && (millis() - selectDebounceTime) > debounceDelay){      
-      selectDebounceTime = millis();
+    // Check edge-triggered select flag
+    if (SelectButtonTriggered){      
       SelectButtonPressed();
     }
     
     if(SelectActive == true){      
       AdjustParameterValues();  
     }else{  
-      CycleMenuItems();           
+      CycleMenuItems();         
     }
   }
   return MenuActive;

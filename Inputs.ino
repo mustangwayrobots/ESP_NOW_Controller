@@ -1,43 +1,53 @@
-// ==============================================================================
-// Inputs.ino - Clean ADC Reading, Calibration, and Normalization
-// ==============================================================================
+/**
+ * ==============================================================================
+ * readInputs.ino - Input Polling, ADC Reads, and Button Edge Detection
+ * ==============================================================================
+ */
 
-void readInputs() {    
-    MenuButton   = (digitalRead(MENU_BUTTON_PIN) == LOW); 
-    SelectButton = (digitalRead(SELECT_BUTTON_PIN) == LOW); 
-    UpButton     = (digitalRead(UP_BUTTON_PIN) == LOW); 
-    DownButton   = (digitalRead(DOWN_BUTTON_PIN) == LOW); 
-    SpinButton   = (digitalRead(SEL_BUTTON_PIN) == LOW);   
+// External declarations for global flags and pins used across files
+extern int joystickX;
+extern int joystickY;
+extern bool UpButton;
+extern bool DownButton;
+extern bool SpinButton;
+extern bool MenuButtonTriggered;
+extern bool SelectButtonTriggered;
 
-    // Read raw 12-bit ADC values (0 to 4095 on ESP32)
-    int rawY = constrain(analogRead(JOYSTICK_HORZ_PIN), 0, 4095); 
-    int rawX = constrain(analogRead(JOYSTICK_VERT_PIN), 0, 4095);
-    
-    // Use name-based lookups for joystick zero calibration ( completely index-independent!)
-    int zeroX = getSetting("JOYSTICK ZERO-X"); 
-    int zeroY = getSetting("JOYSTICK ZERO-Y");
+void readInputs() {
+  // Read raw joystick axes (12-bit ADC)
+  joystickX = analogRead(JOYSTICK_HORZ_PIN);
+  joystickY = analogRead(JOYSTICK_VERT_PIN);
 
-    // Fallback to absolute center (2048) if uncalibrated
-    if (zeroX < 1800 || zeroX > 2300) zeroX = 2048;
-    if (zeroY < 1800 || zeroY > 2300) zeroY = 2048;   
+  // Read action buttons (active LOW with internal pull-ups)
+  UpButton = (digitalRead(UP_BUTTON_PIN) == LOW);
+  DownButton = (digitalRead(DOWN_BUTTON_PIN) == LOW);
+  SpinButton = (digitalRead(SPIN_BUTTON_PIN) == LOW);
 
-    // Normalize raw ADC around the calibrated zero point into -1023 to 1023 range
-    if (rawY >= zeroY) {
-        joystickY = map(rawY, zeroY, 4095, 0, 1023);
-    } else {
-        joystickY = map(rawY, 0, zeroY, -1023, 0);
+  // --- Menu Button Press-Edge Detection (C-11 Fix) ---
+  static bool lastMenuRawState = HIGH; 
+  bool currentMenuRawState = digitalRead(MENU_BUTTON_PIN);
+
+  MenuButtonTriggered = false;
+  if (currentMenuRawState == LOW && lastMenuRawState == HIGH) {
+    static unsigned long lastMenuPressTime = 0;
+    if (millis() - lastMenuPressTime > 200) {
+      lastMenuPressTime = millis();
+      MenuButtonTriggered = true; 
     }
+  }
+  lastMenuRawState = currentMenuRawState;
 
-    if (rawX >= zeroX) {
-        joystickX = map(rawX, zeroX, 4095, 0, 1023);
-    } else {
-        joystickX = map(rawX, 0, zeroX, -1023, 0);
+  // --- Select Button Press-Edge Detection ---
+  static bool lastSelectRawState = HIGH;
+  bool currentSelectRawState = digitalRead(SELECT_BUTTON_PIN);
+
+  SelectButtonTriggered = false;
+  if (currentSelectRawState == LOW && lastSelectRawState == HIGH) {
+    static unsigned long lastSelectPressTime = 0;
+    if (millis() - lastSelectPressTime > 200) {
+      lastSelectPressTime = millis();
+      SelectButtonTriggered = true;
     }
-    joystickX = constrain(joystickX, -1023, 1023);
-    joystickY = constrain(joystickY, -1023, 1023);
-
-    // DEBUG: Only prints raw vs normalized joystick values when debug flag is true
-#if DEBUG_SERIAL_OUTPUT
-    Serial.printf("[IN] rawX:%4d rawY:%4d | joyX:%4d joyY:%4d\n", rawX, rawY, joystickX, joystickY);
-#endif
-}
+  }
+  lastSelectRawState = currentSelectRawState;
+}

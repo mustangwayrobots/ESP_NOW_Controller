@@ -17,23 +17,29 @@ Preferences preferences;
 
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
+// Near the top of ESP_NOW_Controller.ino with your other globals:
 
+bool NormalMode = true;
+bool TXConnectionStatus = false;
+bool RXConnectionStatus = false;
+bool NewDataFlag = false;
+bool UpButton = false;
+bool DownButton = false;
+bool SpinButton = false;
+bool MenuButtonTriggered = false;
+bool SelectButtonTriggered = false;
 
-boolean NormalMode = true;
-boolean TXConnectionStatus = false;
-boolean RXConnectionStatus = false;
-boolean MenuButton, SelectButton, UpButton, DownButton, SpinButton;
-boolean NewDataFlag = false;
 
 volatile boolean SendBindingComplete = false; 
 volatile boolean ReceiveBindingComplete = false;
 
-uint8_t BindingMac[] = {0x36, 0x33, 0x33, 0x33, 0x33, 0x99};
+uint8_t BindingMac[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+uint8_t cachedCarMac[6]; // <--- Add this line here
 uint8_t broadcastMac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 int Speed_A = 0;
 int Speed_B = 0;
-int joystickX;
-int joystickY;
+int joystickX = 2048;   // Start at stick center until the first real reading
+int joystickY = 2048;
 boolean MenuMode;
 
 // Adaptive Rate Tracking
@@ -69,7 +75,7 @@ void setup() {
   
   pinMode(MENU_BUTTON_PIN, INPUT_PULLUP);
   pinMode(SELECT_BUTTON_PIN, INPUT_PULLUP);
-  pinMode(SEL_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(SPIN_BUTTON_PIN, INPUT_PULLUP);
   pinMode(UP_BUTTON_PIN, INPUT_PULLUP);
   pinMode(DOWN_BUTTON_PIN, INPUT_PULLUP);
 
@@ -92,11 +98,11 @@ void setup() {
   preferences.end();
   
   readInputs();    
-  if (MenuButton == false){
+  if (digitalRead(MENU_BUTTON_PIN) == HIGH){
     NormalMode = true;
     
-    // Play power-on tune using name-based lookup
-    int tuneIndex = getSetting("POWER ON TUNE");
+    // Play power-on tune
+    int tuneIndex = currentSettings[SET_POWER_ON_TUNE];
     if (tuneIndex > 0 && tuneIndex < 94) {
       play_rtttl(PIEZO_PIN, songs2[tuneIndex]);
     }
