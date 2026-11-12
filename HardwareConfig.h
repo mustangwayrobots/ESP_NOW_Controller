@@ -6,9 +6,9 @@
  *   THROTTLE pin = the forward/back stick axis
  *   STEER pin    = the left/right stick axis
  *
- * Choosing the board: ESP_NOW_Controller.ino has   #define HARDWARE_V1
- * above the #include "HardwareConfig.h" line. Leave it in to build for V1.
- * Delete (or comment out) that line to build for V2.
+ * Choosing the board: near the top of ESP_NOW_Controller.ino, set
+ *   #define HARDWARE_V1   or   #define HARDWARE_V2
+ * A build that passes -DHARDWARE_Vx (like the GitHub flasher build) overrides it.
  * (Software-wide settings and shared variables live in ConfigData.h.)
  *
  * Screen type: each board sets ONE of these, and ESP_NOW_Controller.ino
@@ -17,6 +17,10 @@
  *   OLED_SH1106_128X64    1.3"  128x64 screen
  */
 #pragma once
+
+#if defined(HARDWARE_V1) && defined(HARDWARE_V2)
+  #error "Pick only one board: HARDWARE_V1 or HARDWARE_V2"
+#endif
 
 #ifdef HARDWARE_V1
   #define BOARD_VERSION_STR "ESP32-C3 RC Controler V1"
