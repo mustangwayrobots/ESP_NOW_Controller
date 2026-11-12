@@ -11,8 +11,11 @@
 #include <U8g2lib.h>
 #include "ConfigData.h"
 
-// --- Board choice: keep this line while testing on V1, delete it for V2 ---
-#define HARDWARE_V1
+// --- Board choice: change HARDWARE_V1 below to HARDWARE_V2 for the V2 board ---
+// (A build that passes -DHARDWARE_Vx, like the GitHub flasher build, overrides this.)
+#if !defined(HARDWARE_V1) && !defined(HARDWARE_V2)
+  #define HARDWARE_V1
+#endif
 #include "HardwareConfig.h" // Pin numbers and screen type per board
 #include "songs2.h"
 
