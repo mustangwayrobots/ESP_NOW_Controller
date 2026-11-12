@@ -1,6 +1,6 @@
 {
-  "name": "RC Controller Firmware (HARDWARE V2)",
-  "version": "Build: 2026-11-12 22:16 UTC, core 3.3.12",
+  "name": "ESP_NOW_Controller (Hardware V2)",
+  "version": "Build 2026-11-12 22:17 UTC (50d95ce)",
   "home_assistant_domain": "esp_web_tools",
   "new_install_prompt_erase": false,
   "builds": [
