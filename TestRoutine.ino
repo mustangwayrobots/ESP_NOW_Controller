@@ -1,60 +1,46 @@
 // ==============================================================================
-// TestRoutine.ino - Automated Trim and Motor Testing Routine
+// TestRoutine.ino - Trim test: forward, pause, reverse, stop
 // ==============================================================================
-// Drives straight forward, pauses, then straight back, so you can check the
-// FORWARD TRIM / REVERSE TRIM settings. It "moves the stick" in software by
-// feeding CalculateMotorDriverValues() a position relative to the calibrated
-// stick center (ZERO-X = forward/back axis, ZERO-Y = left/right axis).
+// "Moves the stick" in software by feeding CalculateMotorDriverValues() a
+// position relative to the calibrated stick center. Press MENU to stop early.
 
-const int TEST_FULL_STICK = 1800;   // Same full-deflection size MotorControl.ino uses
+// One part of the test. Returns true if MENU was pressed (stop the test).
+static bool testLeg(const char* label, const char* footer, int throttleOffset,
+                    uint32_t ms, int centerThrottle, int centerSteer) {
+  uint32_t start = millis();
+  while (millis() - start < ms) {
+    if (digitalRead(MENU_BUTTON_PIN) == LOW) return true;
+    CalculateMotorDriverValues(centerThrottle + throttleOffset, centerSteer);
+    SendData();
+
+    char big[12];
+    unsigned long secondsLeft = (ms - (millis() - start) + 999) / 1000;
+    snprintf(big, sizeof(big), "%s %lu", label, secondsLeft);
+    showStatus("TRIM TEST", "MENU=stop", big, footer);
+    delay(20);
+  }
+  return false;
+}
 
 void runtest(){
-  char buf2[20];
-  int testSeconds = currentSettings[SET_TEST_TRIM];
-  int centerX = currentSettings[SET_ZERO_X];   // forward/back axis
-  int centerY = currentSettings[SET_ZERO_Y];   // left/right axis
+  uint32_t legMs     = currentSettings[SET_TEST_TRIM] * 1000UL;
+  int centerThrottle = currentSettings[SET_ZERO_THROTTLE];   // forward/back axis
+  int centerSteer    = currentSettings[SET_ZERO_STEER];      // left/right axis
 
-  // 1. FORWARD TEST (stick pushed fully forward, no steering)
-  uint32_t runtime = millis() + (testSeconds * 1000L);
-  while (millis() < runtime){
-    CalculateMotorDriverValues(centerX - TEST_FULL_STICK, centerY);
+  bool stopped = testLeg("FWD",   "Driving forward",  -STICK_FULL_RANGE, legMs, centerThrottle, centerSteer)
+              || testLeg("PAUSE", "Stopped",           0,                1000,  centerThrottle, centerSteer)
+              || testLeg("REV",   "Driving backward",  STICK_FULL_RANGE, legMs, centerThrottle, centerSteer);
+
+  // Always finish with 1 s of stop packets
+  uint32_t start = millis();
+  while (millis() - start < 1000) {
+    CalculateMotorDriverValues(centerThrottle, centerSteer);
     SendData();
-    sprintf(buf2, "FWD %4.1f s", (runtime - millis()) / 1000.0);
-    displayMsg(buf2, 255, 1);
+    showStatus("TRIM TEST", "", stopped ? "Stopped" : "Done", "");
     delay(20);
-    yield();
   }
 
-  // 2. CLEAR VISUAL PAUSE (stick at center, keep sending stop packets)
-  uint32_t pauseRuntime = millis() + 1000;
-  while (millis() < pauseRuntime){
-    CalculateMotorDriverValues(centerX, centerY);
-    SendData();
-    displayMsg("PAUSE", 255, 1);
-    delay(20);
-    yield();
-  }
-
-  // 3. REVERSE TEST (stick pulled fully back, no steering)
-  runtime = millis() + (testSeconds * 1000L);
-  while (millis() < runtime){
-    CalculateMotorDriverValues(centerX + TEST_FULL_STICK, centerY);
-    SendData();
-    sprintf(buf2, "REV %4.1f s", (runtime - millis()) / 1000.0);
-    displayMsg(buf2, 255, 1);
-    delay(20);
-    yield();
-  }
-
-  // 4. STOP SEQUENCE (stick at center, keep sending stop packets)
-  uint32_t stopRuntime = millis() + 1000;
-  while (millis() < stopRuntime) {
-    CalculateMotorDriverValues(centerX, centerY);
-    SendData();
-    displayMsg("TEST DONE", 255, 1);
-    delay(20);
-    yield();
-  }
-
-  Serial.println("test done");
+  // Wait for MENU release so it does not also close the menu
+  while (digitalRead(MENU_BUTTON_PIN) == LOW) delay(10);
+  Serial.println(stopped ? "test stopped" : "test done");
 }

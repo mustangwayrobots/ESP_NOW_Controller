@@ -11,10 +11,6 @@ int notes[] = { 0,
 2093, 2217, 2349, 2489, 2637, 2794, 2960, 3136, 3322, 3520, 3729, 3951
 };
 
-void blinkLED(int delayTime) {
-  // Optional stub
-}
-
 void play_rtttl(int TonePin, const char *p) {
   byte default_dur = 4;
   byte default_oct = 6;
@@ -60,7 +56,7 @@ void play_rtttl(int TonePin, const char *p) {
     while(isdigit(*p)) {
       num = (num * 10) + (*p++ - '0');
     }
-    bpm = num;
+    if (num > 0) bpm = num;   // a bpm of 0 would divide by zero below
     p++;                   
   }
 
@@ -111,6 +107,9 @@ void play_rtttl(int TonePin, const char *p) {
     if(*p == ',') p++;       
 
     if(note) {
+      // notes[] only holds octaves 4-7: move any other octave into that range
+      if (scale < 4) scale = 4;
+      if (scale > 7) scale = 7;
       int freq = notes[(scale - 4) * 12 + note];
       tone(TonePin, freq);
       delay(duration);

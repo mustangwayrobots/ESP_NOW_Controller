@@ -10,37 +10,39 @@
 #include <Wire.h>
 #include <U8g2lib.h>
 #include "ConfigData.h"
-#include "HardwareConfig.h" // Pulls in version-specific pin maps
+
+// --- Board choice: keep this line while testing on V1, delete it for V2 ---
+#define HARDWARE_V1
+#include "HardwareConfig.h" // Pin numbers and screen type per board
 #include "songs2.h"
 
 Preferences preferences;
 
-U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+// --- Display driver, picked by the screen type in HardwareConfig.h ---
+#if defined(OLED_SH1106_128X64)
+  U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+#elif defined(OLED_SSD1306_128X32)
+  U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+#else
+  #error "No screen type set for this board in HardwareConfig.h"
+#endif
 
-// Near the top of ESP_NOW_Controller.ino with your other globals:
-
+// --- Shared variables (declared for every tab in ConfigData.h) ---
 bool NormalMode = true;
 bool TXConnectionStatus = false;
-bool RXConnectionStatus = false;
-bool NewDataFlag = false;
 bool UpButton = false;
 bool DownButton = false;
 bool SpinButton = false;
 bool MenuButtonTriggered = false;
 bool SelectButtonTriggered = false;
 
-
-volatile boolean SendBindingComplete = false; 
 volatile boolean ReceiveBindingComplete = false;
 
 uint8_t BindingMac[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-uint8_t cachedCarMac[6]; // <--- Add this line here
+uint8_t cachedCarMac[6];
 uint8_t broadcastMac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-int Speed_A = 0;
-int Speed_B = 0;
-int joystickX = 2048;   // Start at stick center until the first real reading
-int joystickY = 2048;
-boolean MenuMode;
+int stickThrottle = 2048;   // Start at stick center until the first real reading
+int stickSteer = 2048;
 
 // Adaptive Rate Tracking
 unsigned long lastSendTime = 0;
@@ -52,8 +54,8 @@ void setupBindingMode();
 void loopNormalMode();    
 void loopBindingMode();
 void readInputs();
-void displayMsg(const char *NewMessage, int contrast = 255, int blinkMode = 1, bool smallFont = false);
-void CalculateMotorDriverValues(int rawX, int rawY);
+void displayMsg(const char *NewMessage);
+void CalculateMotorDriverValues(int rawThrottle, int rawSteer);
 void SendData();
 boolean ActiveMenu();
 void play_rtttl(int TonePin, const char *p);
@@ -65,12 +67,14 @@ void setup() {
   Serial.begin(115200); 
   Serial.println("");
   Serial.println("STARTING");
+  Serial.println(BOARD_VERSION_STR);
   
-  Wire.begin(5, 6); // SDA on GPIO 5, SCL on GPIO 6
+  Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN); // Screen pins from HardwareConfig.h
+  u8g2.setBusClock(400000);   // fast I2C: a full screen takes about 25 ms
   u8g2.begin();
   u8g2.setFlipMode(1); 
+  u8g2.setContrast(255);
 
-  pinMode(LED_BUILTIN, OUTPUT);
   pinMode(PIEZO_PIN, OUTPUT);
   
   pinMode(MENU_BUTTON_PIN, INPUT_PULLUP);
@@ -79,23 +83,8 @@ void setup() {
   pinMode(UP_BUTTON_PIN, INPUT_PULLUP);
   pinMode(DOWN_BUTTON_PIN, INPUT_PULLUP);
 
-  // --- Load Settings and MAC from ESP32 NVS (Preferences) ---
-  preferences.begin("rc-config", false);
-  
-  if (preferences.isKey("mac")) {
-    String savedMac = preferences.getString("mac", "");
-    sscanf(savedMac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-           &BindingMac[0], &BindingMac[1], &BindingMac[2],
-           &BindingMac[3], &BindingMac[4], &BindingMac[5]);
-    Serial.println("Loaded bound MAC from NVS.");
-  }
-
-  for(int i = 0; i < MENU_ITEMS; i++) {
-    char key[10];
-    snprintf(key, sizeof(key), "set_%d", i);
-    currentSettings[i] = preferences.getInt(key, defaultSettings[i]);
-  }
-  preferences.end();
+  // --- Load saved menu settings from flash (storage.ino) ---
+  loadSettings();
   
   readInputs();    
   if (digitalRead(MENU_BUTTON_PIN) == HIGH){
@@ -103,7 +92,7 @@ void setup() {
     
     // Play power-on tune
     int tuneIndex = currentSettings[SET_POWER_ON_TUNE];
-    if (tuneIndex > 0 && tuneIndex < 94) {
+    if (tuneIndex > 0 && tuneIndex < NUM_SONGS) {
       play_rtttl(PIEZO_PIN, songs2[tuneIndex]);
     }
     setupNormalMode();      
