@@ -22,7 +22,7 @@
   #error "Pick only one board: HARDWARE_V1 or HARDWARE_V2"
 #endif
 
-#ifdef HARDWARE_V1
+#if defined(HARDWARE_V1)
   #define BOARD_VERSION_STR "ESP32-C3 RC Controler V1"
   #define DEBUG_SERIAL_OUTPUT false  // Set to true only when troubleshooting inputs/radio
   #define OLED_SH1106_128X64         // V2 screen type (1.3")
@@ -38,7 +38,7 @@
   #define DOWN_BUTTON_PIN   0
   #define PIEZO_PIN         20
 
-#else
+#elif defined(HARDWARE_V2)
   #define BOARD_VERSION_STR "ESP32-C3 RC Controler V2"
   #define DEBUG_SERIAL_OUTPUT false  // Set to true only when troubleshooting inputs/radio
   #define OLED_SH1106_128X64         // V2 screen type (1.3")
@@ -52,4 +52,6 @@
   #define UP_BUTTON_PIN     1
   #define DOWN_BUTTON_PIN   0
   #define PIEZO_PIN         20
+#else
+  #error "No board chosen. Set the board line at the top of ESP_NOW_Controller.ino."
 #endif
