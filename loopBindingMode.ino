@@ -5,8 +5,8 @@
  */
 
 const unsigned long BIND_TIMEOUT_MS   = 20000; // give up if no car answers
-const unsigned long BIND_SEND_MS      = 200;   // bind request repeat (mode 0)
-const unsigned long CONFIRM_SEND_MS   = 100;   // confirmation repeat (mode 3)
+const unsigned long BIND_SEND_MS      = 200;   // bind request repeat
+const unsigned long CONFIRM_SEND_MS   = 100;   // confirmation repeat
 const unsigned long CONFIRM_TIME_MS   = 1500;  // keep confirming this long, then reboot
 
 // Runs once, right after the car answers: save its MAC and add it as a peer.
@@ -59,7 +59,7 @@ void loopBindingMode() {
     ESP.restart();
   }
 
-  // Step 1: Broadcast bind request (mode 0) until car acknowledges
+  // Step 1: Broadcast bind request until a car acknowledges
   if (!ReceiveBindingComplete) {
     char footer[24];
     unsigned long secondsLeft = (BIND_TIMEOUT_MS - (millis() - bindStartTime)) / 1000 + 1;
@@ -69,11 +69,11 @@ void loopBindingMode() {
       lastBindSend = millis();
       RC_Packet_Structure bindPacket;
       memset(&bindPacket, 0, sizeof(bindPacket));
-      bindPacket.protocolMode = 0; 
+      setPacketHeader(bindPacket, PKT_BIND_REQUEST, bindDriveChannel);
       esp_now_send(broadcastMac, (uint8_t *)&bindPacket, sizeof(bindPacket));
     }
   } 
-  // Step 2: Car acknowledged! Send mode-3 confirmation, then reboot
+  // Step 2: Car acknowledged! Send the confirmation, then reboot
   else {
     if (ackTime == 0) {
       ackTime = millis();
@@ -87,7 +87,7 @@ void loopBindingMode() {
       lastConfirmSend = millis();
       RC_Packet_Structure confirmPacket;
       memset(&confirmPacket, 0, sizeof(confirmPacket));
-      confirmPacket.protocolMode = 3; // Verified confirmation (O-04)
+      setPacketHeader(confirmPacket, PKT_BIND_CONFIRM, bindDriveChannel); // Verified confirmation (O-04)
       esp_now_send(BindingMac, (uint8_t *)&confirmPacket, sizeof(confirmPacket));
     }
 

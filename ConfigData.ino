@@ -83,4 +83,3 @@ const char* const menuHelpText[] = {
 
 // --- ESP-NOW Global Packet Instances ---
 RC_Packet_Structure SendingData;
-RC_Packet_Structure ReceivingData;

@@ -1,6 +1,6 @@
 {
   "name": "ESP_NOW_Controller (Hardware V2)",
-  "version": "Build 2026-11-12 22:44 UTC (f902d1c)",
+  "version": "Build 2026-11-13 00:16 UTC (06e42fb)",
   "home_assistant_domain": "esp_web_tools",
   "new_install_prompt_erase": false,
   "builds": [

@@ -11,6 +11,8 @@
 #ifndef CONFIG_DATA_H
 #define CONFIG_DATA_H
 
+#include "Protocol.h"   // Packet layout shared with the car (keep both copies identical)
+
 // ------------------------------------------------------------------------------
 // Named list of settings. The ORDER here must match the Menu[] table (and the
 // defaultSettings[] and menuHelpText[] lists) in ConfigData.ino exactly.
@@ -54,22 +56,14 @@ const int  MOTOR_MIN_PWM            = 15;    // Motor commands smaller than this
 const int  SEND_INTERVAL_ACTIVE_MS  = 20;    // Packet every 20 ms (50 Hz) while driving
 const int  SEND_INTERVAL_IDLE_MS    = 50;    // Heartbeat every 50 ms when sticks are parked
 const int  SEND_INTERVAL_WAITING_MS = 100;   // Packet rate while the car is not answering
-const unsigned long CONNECTION_TIMEOUT_MS = 500;   // No send-ACK for this long = "WAITING"
+const unsigned long LINK_TIMEOUT_MS       = 650;   // No reply (telemetry) from the car for this long = not linked
+const unsigned long CAR_RADIO_TIMEOUT_MS  = 500;   // No radio-level ACK for this long = car is off or out of range
+const unsigned long MISMATCH_SHOW_MS      = 2500;  // Show "firmware mismatch" this long after the last mismatched packet
 const unsigned long PEER_RECHECK_MS       = 2000;  // How often to re-add the car while waiting
 const int  ACCEL_FULL_RAMP_MS       = 1000;  // Stop-to-full-speed time when ACCEL RATE is 0% (100% = no limit)
 const int  ACCEL_MAX_DT_MS          = 50;    // Longest time step the ramp will use (so the first packet after a pause still starts gently)
 const int  NUM_SONGS                = 94;    // Entries in songs2.h
-const uint8_t BINDING_CHANNEL       = 1;     // Pairing always happens on this Wi-Fi channel
-
-// ------------------------------------------------------------------------------
-// Packet sent between controller and car
-// ------------------------------------------------------------------------------
-struct __attribute__((packed)) RC_Packet_Structure {
-  uint8_t protocolMode; // 0 = Bind Request, 1 = Normal Drive, 2 = Bind Acknowledgement, 3 = Bind Confirmed
-  int motor_A1; int motor_A2;
-  int motor_B1; int motor_B2;
-  int weapon;   int battery;
-};
+// (The packet layout, BINDING_CHANNEL and the telemetry rate are in Protocol.h)
 
 struct menuStruct {
   char label[21];
@@ -82,7 +76,6 @@ struct menuStruct {
 // ------------------------------------------------------------------------------
 // ConfigData.ino
 extern RC_Packet_Structure SendingData;
-extern RC_Packet_Structure ReceivingData;
 extern menuStruct Menu[];
 extern int defaultSettings[];
 extern int tempSettings[];
@@ -107,8 +100,14 @@ extern unsigned long lastSendTime;
 extern int currentSendInterval;
 
 // setupNormalMode.ino
-extern unsigned long lastSendAckTime;
+extern volatile unsigned long lastSendAckTime;    // last time the car's radio acknowledged a send
+extern volatile unsigned long lastTelemetryTime;  // last time the car replied (0 = never)
+extern volatile unsigned long lastMismatchTime;   // last packet from our car in another protocol version (0 = never)
+extern volatile int carBatteryMv;                 // car battery from the last telemetry
 extern bool carPaired;              // false if no car MAC is saved in flash
+
+// setupBindingMode.ino
+extern uint8_t bindDriveChannel;    // drive channel offered to the car while pairing
 
 // MenuHelp.ino
 extern boolean InfoModeActive;
