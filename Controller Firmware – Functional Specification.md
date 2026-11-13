@@ -2,7 +2,7 @@
 
 Nov 12, 2026 · @Hog
 
-This document describes what the handheld controller firmware does as of the Nov 12, 2026 code, tested on V1 controller hardware. It is one of four specifications: Car Firmware, Controller Firmware (this one), Car Hardware and Controller Hardware. The controller now matches the car's confirmed pairing handshake (mode 3).
+This document describes what the handheld controller firmware does as of the Nov 12, 2026 code, tested on V1 controller hardware. It is one of four specifications: Car Firmware, Controller Firmware (this one), Car Hardware and Controller Hardware. It uses protocol version 2; the car and controller must run the same version and carry an identical `Protocol.h`.
 
 ## 1. Scope
 
@@ -15,7 +15,7 @@ This document describes what the handheld controller firmware does as of the Nov
 1. Pairs with one car over ESP-NOW using a three-step handshake and remembers the car's MAC address in flash.
 2. Reads a two-axis joystick and five buttons and mixes them into left and right motor commands.
 3. Sends drive and weapon commands to the car: every 20 ms while driving, every 50 ms when idle, every 100 ms when not linked.
-4. Shows link state, radio channel and the car's battery voltage on a 128×64 OLED.
+4. Shows link state, radio channel and the car's battery voltage on a 128×64 OLED. The link counts as up only while the car replies.
 5. Offers a 19-item settings menu with an edit screen, help pages, a trim test and a startup tune.
 
 ## 3. Hardware Dependencies
@@ -42,12 +42,13 @@ The V2 values are copies of V1 and are marked "CHECK against V2 schematic" in th
 | --- | --- |
 | `ESP_NOW_Controller.ino` | Shared variables, display driver choice, `setup()`, mode dispatch |
 | `HardwareConfig.h` | Pin numbers and screen type per board |
-| `ConfigData.h` | Named settings list (`SettingId`), tuning numbers, packet struct, shared declarations |
+| `Protocol.h` | Packet struct, packet types, version, binding channel, telemetry rate. Identical copy in the car repo. |
+| `ConfigData.h` | Named settings list (`SettingId`), tuning numbers, shared declarations |
 | `ConfigData.ino` | Menu table, factory defaults, help text |
 | `RadioChannel.ino` | `getRadioChannel()`: the one place the channel is worked out |
 | `Inputs.ino` | Reads stick and buttons; press detection for MENU and SELECT |
 | `MotorControl.ino` | Mixing, trim, acceleration limit, pin values, weapon value |
-| `SendData.ino` | Sends a mode 1 packet to the cached car MAC |
+| `SendData.ino` | Sends a drive packet to the cached car MAC |
 | `setupNormalMode.ino`, `loopNormalMode.ino` | Radio, link watchdog, adaptive rate, driving screens |
 | `setupBindingMode.ino`, `loopBindingMode.ino` | Pairing handshake |
 | `storage.ino` | All flash reads and writes (settings and car MAC) |
@@ -61,16 +62,17 @@ The sketch is a cooperative loop. The Arduino IDE joins all `.ino` tabs into one
 
 ## 5. Communication Protocol (Controller View)
 
-The packet is a packed 25-byte struct shared with the car (see Car Firmware FSD): `protocolMode` (1 byte), then `motor_A1`, `motor_A2`, `motor_B1`, `motor_B2`, `weapon` and `battery` (4-byte ints). The driving channel comes from `getRadioChannel()`: the last byte of the controller's own MAC modulo 3 gives 0 → channel 1, 1 → channel 6, 2 → channel 11. Pairing always uses channel 1 (`BINDING_CHANNEL`).
+The packet is a packed 27-byte struct defined in `Protocol.h` and shared with the car (see Car Firmware FSD): `protocolVersion`, `packetType` and `channel` (1 byte each), then `motor_A1`, `motor_A2`, `motor_B1`, `motor_B2`, `weapon` and `battery` (4-byte ints). Packets are accepted only if they are exactly 27 bytes with `PROTOCOL_VERSION` (2). The driving channel comes from `getRadioChannel()`: the last byte of the controller's own MAC modulo 3 gives 0 → channel 1, 1 → channel 6, 2 → channel 11. Pairing always uses channel 1 (`BINDING_CHANNEL`).
 
-| Mode | Controller does |
+| Type | Controller does |
 | --- | --- |
-| 0 Bind request | Broadcasts a zeroed packet on channel 1 every 200 ms while pairing |
-| 2 Bind acknowledgement | Receives it from the car; the first one wins and its sender MAC is kept |
-| 3 Bind confirmed | Sends it to the car every 100 ms for 1.5 s after the acknowledgement |
-| 1 Normal | Sends drive and weapon values to the car; receives the car's battery voltage (mV) |
+| 0 `PKT_BIND_REQUEST` | Broadcasts it on channel 1 every 200 ms while pairing, carrying its drive channel |
+| 2 `PKT_BIND_ACK` | Receives it from the car; the first one that echoes the right channel wins and its sender MAC is kept |
+| 3 `PKT_BIND_CONFIRM` | Sends it to the car every 100 ms for 1.5 s after the acknowledgement, carrying the drive channel |
+| 1 `PKT_DRIVE` | Sends drive and weapon values to the car |
+| 4 `PKT_TELEMETRY` | Receives the car's battery voltage (mV), every 200 ms while the car is accepting drive packets |
 
-The link counts as up when a unicast send has been acknowledged by the car's radio within the last 500 ms. Telemetry is accepted only from the paired car's MAC and only if the packet is at least 25 bytes.
+The link counts as up only while telemetry from the paired car keeps arriving (within 650 ms). The radio-level send acknowledgement is still tracked, but only to tell "car off" from "car on but not answering". A packet from the paired car with the wrong size or version marks a firmware mismatch.
 
 ## 6. Operating Modes
 
@@ -88,29 +90,29 @@ The link counts as up when a unicast send has been acknowledged by the car's rad
 2. Read the car MAC from flash into RAM (`cachedCarMac`). `carPaired` is false if no MAC is saved.
 3. Start ESP-NOW (restart the board if it fails), set the channel, add the car as a unicast peer.
 4. Send callback: on success, record the time.
-5. Receive callback: copy the packet into `ReceivingData` if it is long enough and from the paired car.
+5. Receive callback: ignore packets not from the paired car. Wrong size or version: record a mismatch time. Current telemetry: store the battery (`carBatteryMv`) and the time (`lastTelemetryTime`).
 
 ### 6.3 Normal loop
 
 1. Read inputs.
 2. If the menu is open, run only the menu, wait 10 ms and return. Nothing is transmitted.
-3. Link watchdog: up if a send was acknowledged in the last 500 ms.
-4. **Not linked:** a 1000 Hz, 100 ms beep every 10 s. The screen shows `NO SIGNAL` / Waiting / Turn on the car, or `NOT PAIRED` / No car / Hold MENU at power on if no car is saved. If a car is saved, it is re-added as a peer every 2 s and a drive packet is sent every 100 ms. If no car is saved, nothing is sent.
-5. **Linked:** the screen shows `CONNECTED`, the channel, and the car battery as x.xx V (`-.-- V` until the first reading). It redraws at most 4 times a second.
+3. Link watchdog: up if telemetry arrived in the last 650 ms. Also works out whether the car's radio acknowledged a send in the last 500 ms, and whether a mismatched packet arrived in the last 2.5 s.
+4. **Not linked:** a 1000 Hz, 100 ms beep every 10 s. The screen shows, in this order of priority: `NOT PAIRED` / No car / Hold MENU at power on if no car is saved; `FIRMWARE` / Mismatch / Update car + remote after a mismatched packet; `NO REPLY` / Car on / Re-pair or update car if the car's radio acknowledges but it does not reply; otherwise `NO SIGNAL` / Waiting / Turn on the car. If a car is saved, it is re-added as a peer every 2 s and a drive packet is sent every 100 ms. If no car is saved, nothing is sent.
+5. **Linked:** the screen shows `CONNECTED`, the channel, and the car battery as x.xx V from the latest telemetry. It redraws at most 4 times a second.
 6. **Adaptive rate:** input counts as active when any motor value is not zero or UP or SPIN is held. Active sends every 20 ms, idle every 50 ms. On letting go, the stop packet is sent at once.
 7. Wait 1 ms.
 
 ### 6.4 Pairing
 
-**Setup:** station mode, 19.5 dBm, ESP-NOW on channel 1, broadcast peer. The receive callback ignores short packets, keeps the sender MAC of the first mode 2 packet and raises a flag. Flash writes are done in the loop, not the callback.
+**Setup:** station mode, 19.5 dBm, ESP-NOW on channel 1, broadcast peer. The drive channel from `getRadioChannel()` is worked out once (`bindDriveChannel`). The receive callback ignores packets that are not the current protocol, keeps the sender MAC of the first acknowledgement that echoes that channel and raises a flag. Flash writes are done in the loop, not the callback.
 
 **Loop:**
 
 1. While MENU is still held: `PAIRING` / Release / Let go of MENU. The 20 s window starts on release.
-2. Searching: shows `Searching` with a countdown and broadcasts mode 0 every 200 ms.
+2. Searching: shows `Searching` with a countdown and broadcasts a bind request every 200 ms.
 3. No answer in 20 s: shows `Timed out` / Old car is kept, then restarts after 1.5 s. The old pairing stays saved.
 4. Car answers: saves its MAC (only if it is a different car), adds it as a peer and shows `Paired!` with the last two MAC bytes.
-5. Sends mode 3 to the car every 100 ms for 1.5 s, waits 0.5 s and restarts into Normal Mode.
+5. Sends a bind confirmation to the car every 100 ms for 1.5 s, waits 0.5 s and restarts into Normal Mode.
 
 ### 6.5 Settings menu and screens
 
@@ -174,7 +176,7 @@ Code uses the names in the `SettingId` list (for example `currentSettings[SET_MA
 9. **Pin values.** Positive speed goes to input 1 of the motor, negative to input 2. Then `Motor A dir`, `Motor B dir` and `Swap motors` are applied.
 10. **Weapon.** UP held: `Weapon on`. UP released: `Weapon off`.
 
-`SendData()` sets mode 1 and sends the 25 bytes to the car MAC held in RAM. It does not touch flash.
+`SendData()` sets the drive packet header (`PKT_DRIVE`) and sends the 27 bytes to the car MAC held in RAM. It does not touch flash.
 
 ## 9. Functional Requirements
 
@@ -184,13 +186,13 @@ Code uses the names in the `SettingId` list (for example `currentSettings[SET_MA
 | CR-02 | At boot it shall load the 19 settings from flash, using defaults for any never saved or out of range, and load the car MAC into RAM. |
 | CR-03 | It shall drive on the channel from `getRadioChannel()` (1, 6 or 11) and pair on channel 1. |
 | CR-04 | It shall send drive packets every 20 ms while input is active, every 50 ms when idle, every 100 ms when not linked (only if a car is saved), and send a stop packet at once when input goes idle. |
-| CR-05 | It shall treat the link as up when a unicast send was acknowledged within the last 500 ms. |
-| CR-06 | It shall show `CONNECTED` with channel and car battery (x.xx V) when linked, `NO SIGNAL` when paired but not linked, and `NOT PAIRED` when no car is saved. |
-| CR-07 | It shall accept telemetry only from the paired car, in packets of at least 25 bytes. |
+| CR-05 | It shall treat the link as up only while telemetry from the paired car arrived within the last 650 ms. |
+| CR-06 | It shall show `CONNECTED` with channel and car battery (x.xx V) when linked, `NOT PAIRED` when no car is saved, `FIRMWARE` / Mismatch after a mismatched packet, `NO REPLY` when the car's radio answers but the car does not, and `NO SIGNAL` otherwise. |
+| CR-07 | It shall accept only current-protocol packets (exact size, `PROTOCOL_VERSION`), and telemetry only from the paired car. |
 | CR-08 | It shall compute motor and weapon values as in Section 8. |
 | CR-09 | It shall provide the 19-item menu with the button actions in Section 6.5 and save all settings to flash when an edit is confirmed. |
 | CR-10 | It shall transmit nothing while the menu is open. |
-| CR-11 | In Pairing Mode it shall broadcast mode 0 every 200 ms, accept the first mode 2, save the MAC only if it changed, send mode 3 for 1.5 s and restart. |
+| CR-11 | In Pairing Mode it shall broadcast a bind request with its drive channel every 200 ms, accept the first acknowledgement that echoes that channel, save the MAC only if it changed, send the confirmation for 1.5 s and restart. |
 | CR-12 | Pairing shall time out 20 s after MENU is released and keep the old pairing. |
 | CR-13 | It shall play the selected tune at power-up when the setting is 1 to 93. |
 | CR-14 | It shall beep for 100 ms every 10 s while not linked. |
@@ -203,7 +205,10 @@ All are named constants in `ConfigData.h`, except the pairing timings (top of `l
 | Parameter | Value |
 | --- | --- |
 | Packet interval | 20 ms active, 50 ms idle, 100 ms not linked |
-| Link-lost threshold | 500 ms without an acknowledged send |
+| Link-lost threshold | 650 ms without telemetry |
+| Car radio threshold | 500 ms without an acknowledged send (`NO REPLY` vs `NO SIGNAL`) |
+| Mismatch shown for | 2.5 s after the last mismatched packet |
+| Protocol version | 2 |
 | Peer re-add while not linked | every 2 s |
 | Stick full range | 1800 ADC counts from center |
 | Deadzone minimum | 20 ADC counts |
@@ -229,7 +234,7 @@ All flash access is in `storage.ino`, namespace `rc-config`.
 
 Severity is my estimate.
 
-**Resolved since Draft 1:** C-01, C-02, C-04, C-05, C-06, C-07, C-09, C-10, C-11, C-13, C-22, most of C-21. Resolved Nov 12: menu UP/DOWN direction, C-08 range checks, C-14 `displayMsg()` cleanup, C-15 tune octave range, C-23 deadzone minimum 20, C-24 no sending when not paired.
+**Resolved since Draft 1:** C-01, C-02, C-04, C-05, C-06, C-07, C-09, C-10, C-11, C-13, C-22, most of C-21. Resolved Nov 12: menu UP/DOWN direction, C-08 range checks, C-14 `displayMsg()` cleanup, C-15 tune octave range, C-23 deadzone minimum 20, C-24 no sending when not paired. Protocol version 2: C-25 link up only on a car reply, C-26 version byte and telemetry type.
 
 | ID | Severity | Status | Observation |
 | --- | --- | --- | --- |
@@ -240,8 +245,6 @@ Severity is my estimate.
 | C-21 | Low | Accepted | **First car to answer wins** if two cars are pairing at once. |
 | C-16 | Low | Accepted | **Trim test runs at full `Max speed`.** MENU stops it. |
 | C-17 | Low | Accepted | **GPIO8 is SELECT and may be the module's LED pin.** The module has no other free pin. |
-| C-25 | Medium | Open, needs both sides | **`CONNECTED` can show when the car is not listening.** The link counts as up when the car's radio acknowledges a send. That acknowledgement happens below ESP-NOW, even if the car ignores the packet because it is paired to another controller. The screen then shows `CONNECTED` with `-.-- V` while the car does not move. Counting the link as up only after a reply from the car (for example telemetry every 1 s) would fix it. |
-| C-26 | Medium | Open, needs both sides | **No protocol version, and received packets are not checked for mode.** Telemetry and drive both use mode 1, and the receive callback accepts any mode from the car. A version byte and a separate telemetry mode would let each side reject mismatched firmware. Matches car items N-07 and O-06. |
 
 ## 13. Open Questions
 
