@@ -1,8 +1,8 @@
 {
   "name": "ESP_NOW_Controller (Hardware V1)",
-  "version": "Build 2026-11-13 00:59 UTC (bf9ba06)",
+  "version": "Build 2026-11-13 01:14 UTC (45fb32d)",
   "home_assistant_domain": "esp_web_tools",
-  "new_install_prompt_erase": false,
+  "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-C3",
