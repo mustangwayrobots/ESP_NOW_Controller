@@ -21,12 +21,17 @@ void loopNormalMode() {
     return;    
   }
 
-  // 3. --- SEND-ACK CONNECTION WATCHDOG ---
-  if (millis() - lastSendAckTime > CONNECTION_TIMEOUT_MS) {
-    TXConnectionStatus = false;
-  } else {
-    TXConnectionStatus = true;
-  }
+  // 3. --- LINK WATCHDOG (C-25) ---
+  // Linked = the car REPLIED recently. The radio ACK alone only proves the car is on.
+  // (Copy each time first, then read millis(), so a reply arriving mid-check can't
+  //  make the subtraction go negative.)
+  unsigned long telemetryTime = lastTelemetryTime;
+  unsigned long sendAckTime   = lastSendAckTime;
+  unsigned long mismatchTime  = lastMismatchTime;
+  unsigned long now = millis();
+  TXConnectionStatus  = telemetryTime != 0 && (now - telemetryTime) <= LINK_TIMEOUT_MS;
+  bool carRadioHeard  = sendAckTime   != 0 && (now - sendAckTime)   <= CAR_RADIO_TIMEOUT_MS;
+  bool mismatchRecent = mismatchTime  != 0 && (now - mismatchTime)  <= MISMATCH_SHOW_MS;
 
   static uint8_t channel = getRadioChannel();
   char chText[8];
@@ -36,8 +41,10 @@ void loopNormalMode() {
   if (TXConnectionStatus == false) {
     Beep(1000, 10000, 100); // 1000Hz tone, 10-second period, 100ms duration
     
-    if (carPaired) showStatus("NO SIGNAL", chText, "Waiting", "Turn on the car");
-    else           showStatus("NOT PAIRED", chText, "No car", "Hold MENU at power on");
+    if (!carPaired)          showStatus("NOT PAIRED", chText, "No car",   "Hold MENU at power on");
+    else if (mismatchRecent) showStatus("FIRMWARE",   chText, "Mismatch", "Update car + remote");
+    else if (carRadioHeard)  showStatus("NO REPLY",   chText, "Car on",   "Re-pair or update car");
+    else                     showStatus("NO SIGNAL",  chText, "Waiting",  "Turn on the car");
 
     // Periodically re-add the peer every 2 seconds while waiting, 
     // allowing the controller to connect even if the car is turned on later!
@@ -80,7 +87,8 @@ void loopNormalMode() {
     if (millis() - lastDraw > 250) {
       lastDraw = millis();
       char big[12];
-      if (ReceivingData.battery > 0) snprintf(big, sizeof(big), "%.2f V", ReceivingData.battery / 1000.0);
+      int batteryMv = carBatteryMv;
+      if (batteryMv > 0) snprintf(big, sizeof(big), "%.2f V", batteryMv / 1000.0);
       else                           snprintf(big, sizeof(big), "-.-- V");   // no reading yet
       showStatus("CONNECTED", chText, big, "Car battery");
     }

@@ -2,8 +2,16 @@
  * ==============================================================================
  * setupNormalMode.ino - Controller Normal Mode Setup & Valid Binding Check (C-05)
  * ==============================================================================
+ * Two different "the car heard us" signals:
+ *   lastSendAckTime   the car's RADIO acknowledged a packet. Proves the car is
+ *                     on and in range, but not that it is listening to us.
+ *   lastTelemetryTime the car REPLIED with telemetry. It only does that while
+ *                     it accepts our drive packets, so this is the real link (C-25).
  */
-unsigned long lastSendAckTime = 0;
+volatile unsigned long lastSendAckTime   = 0;
+volatile unsigned long lastTelemetryTime = 0;
+volatile unsigned long lastMismatchTime  = 0;
+volatile int carBatteryMv = 0;
 bool carPaired = false;
 
 void setupNormalMode() {
@@ -51,12 +59,18 @@ void setupNormalMode() {
     }
   });
 
+  // Receive callback: sender check, version and size check (Protocol.h), type check (C-26)
   esp_now_register_recv_cb([](const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
-    if (len >= sizeof(RC_Packet_Structure)) {
-      if (memcmp(recv_info->src_addr, cachedCarMac, 6) == 0) {
-        memcpy(&ReceivingData, data, sizeof(RC_Packet_Structure));
-      }
+    if (memcmp(recv_info->src_addr, cachedCarMac, 6) != 0) return;   // not our car
+    unsigned long now = millis();
+    if (!isCurrentProtocol(data, len)) {                             // our car, other firmware
+      lastMismatchTime = now ? now : 1;                              // 0 means "never"
+      return;
     }
+    const RC_Packet_Structure *incoming = (const RC_Packet_Structure*)data;
+    if (incoming->packetType != PKT_TELEMETRY) return;
+    carBatteryMv = incoming->battery;
+    lastTelemetryTime = now ? now : 1;
   });
 
   Serial.println("[INIT-NORM] Normal drive setup complete.");
