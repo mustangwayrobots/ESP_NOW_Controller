@@ -1,8 +1,8 @@
 {
   "repo": "ESP_NOW_Controller",
   "repo_url": "https://github.com/mustangwayrobots/ESP_NOW_Controller",
-  "build_date": "2026-11-13 01:30",
-  "commit": "48116ab",
+  "build_date": "2026-11-20 04:22",
+  "commit": "7e50c53",
   "core": "esp32 3.3.12",
   "boards": [
     {
